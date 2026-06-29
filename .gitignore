@@ -1,0 +1,20 @@
+# Secrets and data
+.env
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Logs and temp
+logs/
+*.log
+scratchpad/
+
+# OS
+.DS_Store
+Thumbs.db
