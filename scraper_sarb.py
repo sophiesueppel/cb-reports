@@ -232,6 +232,8 @@ def _fetch_speech_page(url: str) -> dict:
         pdf_href = pdf_link["href"]
         pdf_url = BASE + pdf_href if pdf_href.startswith("/") else pdf_href
         body = _download_pdf_text(pdf_url)
+        if body and not date_iso:
+            date_iso = _parse_date_str(body)
 
     if not body:
         # Fallback: collect <p> tags (full speech text is in plain <p> elements)
