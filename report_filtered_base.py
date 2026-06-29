@@ -401,7 +401,7 @@ def make_theme_chart(bank_db_name: str, df: pd.DataFrame) -> str:
     except Exception:
         return ""
 
-    bank_themes = themes_data.get("banks", {}).get(bank_db_name) or {}
+    bank_themes = themes_data.get("structural") or themes_data.get("banks", {}).get(bank_db_name) or {}
     watchlist   = themes_data.get("watchlist", {})
     if not watchlist and not bank_themes:
         return ""
@@ -482,7 +482,7 @@ def make_theme_chart(bank_db_name: str, df: pd.DataFrame) -> str:
             chart_html2 = pio.to_html(fig2, include_plotlyjs=False, full_html=False,
                                       config={"displayModeBar": False, "responsive": True})
             out += _section_html(
-                "Structural Themes &middot; Last 12 Months &middot; Relevant speeches only",
+                "Policy Themes &middot; Last 12 Months &middot; Relevant speeches only",
                 chart_html2,
             )
 
