@@ -168,7 +168,7 @@ def make_timeline_with_ghosts(
 
     hover_rel = [
         f"<span style='color:#111827;font-weight:600'>{r['speaker']}</span><br>"
-        f"<span style='color:#374151'>{r['title']}</span><br>"
+        f"<span style='color:#374151'>{r.get('title_en') or r['title']}</span><br>"
         f"<span style='color:#6B7280'>{r['date']}</span><br><br>"
         f"<span style='color:{score_color(r['score'])};font-weight:700'>{r['score']}/10 — {tone(r['score'])}</span><br><br>"
         f"<span style='color:#374151'>{wrap_text(r['justification'])}</span>"
@@ -202,7 +202,7 @@ def make_timeline_with_ghosts(
         )
         ghost_hover = [
             f"<span style='color:#9CA3AF;font-weight:600'>{r['speaker']}</span><br>"
-            f"<span style='color:#9CA3AF'>{r['title']}</span><br>"
+            f"<span style='color:#9CA3AF'>{r.get('title_en') or r['title']}</span><br>"
             f"<span style='color:#D1D5DB'>{r['date']}</span><br>"
             f"<span style='color:#D1D5DB;font-size:11px'>Off-topic · not counted in signal</span>"
             for _, r in ghost.iterrows()
@@ -847,7 +847,7 @@ if(latest){{
     <div>
       <div class="card-date">${{fmt(latest.date)}}</div>
       <div class="card-speaker">${{latest.speaker}}</div>
-      <div class="card-title">${{latest.title}}</div>
+      <div class="card-title">${{latest.title_en||latest.title}}</div>
       <p class="card-justification">${{latest.justification||''}}</p>
     </div>
     <div class="score-block">
@@ -932,7 +932,7 @@ document.getElementById('tbody').innerHTML=byDate.map((d,i)=>{{
     <td class="td-date">${{fmt(d.date)}}</td>
     <td class="td-speaker" title="${{d.speaker}}">${{d.speaker}}</td>
     <td>
-      <div class="title-text"><a href="${{rUrl}}" target="_blank" onclick="event.stopPropagation()">${{d.title}}</a>${{badge}}</div>
+      <div class="title-text"><a href="${{rUrl}}" target="_blank" onclick="event.stopPropagation()">${{d.title_en||d.title}}</a>${{badge}}</div>
       <div class="td-justification">${{d.justification||''}}</div>
       ${{sourceBtn}}
       ${{bodySection}}
