@@ -83,8 +83,33 @@ def generate_global_themes_report() -> None:
                 avg = sum(r["_ts"].get(topic, 0) for _, r in rows.iterrows()) / n
                 global_monthly[topic][month] = {"intensity": avg, "n": n}
 
-    fig1 = _build_heatmap(global_monthly, WATCHLIST_NAMES, months, month_labels, fmt_intensity=_fmt)
-    fig1.update_layout(margin=dict(l=160, r=100, t=20, b=60))
+    def _topic_avg(data: dict) -> float:
+        vals = [v["intensity"] for v in data.values() if v["intensity"] is not None]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    def _trend_arrow(data: dict) -> str:
+        recent = [data[m]["intensity"] for m in months[-3:] if data[m]["intensity"] is not None]
+        prior  = [data[m]["intensity"] for m in months[-6:-3] if data[m]["intensity"] is not None]
+        if not recent or not prior:
+            return "→"
+        diff = sum(recent) / len(recent) - sum(prior) / len(prior)
+        if diff > 0.15:
+            return "↑"
+        if diff < -0.15:
+            return "↓"
+        return "→"
+
+    # Filter to topics with meaningful global prominence and add trend arrows
+    active_global = [t for t in WATCHLIST_NAMES if _topic_avg(global_monthly[t]) >= 0.15]
+    global_labelled = {}
+    global_labels = []
+    for t in active_global:
+        label = f"{t}  {_trend_arrow(global_monthly[t])}"
+        global_labels.append(label)
+        global_labelled[label] = global_monthly[t]
+
+    fig1 = _build_heatmap(global_labelled, global_labels, months, month_labels, fmt_intensity=_fmt)
+    fig1.update_layout(margin=dict(l=170, r=100, t=20, b=60))
 
     # ── Chart 2: Bank breakdown (topics × banks) ──────────────────────────────
     banks_ordered = [b for b in BANK_LABELS if b in df_w["central_bank"].unique()]

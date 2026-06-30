@@ -484,23 +484,41 @@ def make_watchlist_chart(df: pd.DataFrame) -> str:
                 avg = sum(r["_ts"].get(topic, 0) for _, r in rows.iterrows()) / n
                 theme_monthly[topic][month] = {"intensity": avg, "n": n}
 
-    # Only show topics this bank actually discussed at least once
-    active_topics = [
-        t for t in WATCHLIST_NAMES
-        if any(
-            v["intensity"] is not None and v["intensity"] > 0
-            for v in theme_monthly[t].values()
-        )
-    ]
+    def _topic_avg(data: dict) -> float:
+        vals = [v["intensity"] for v in data.values() if v["intensity"] is not None]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    def _trend_arrow(data: dict) -> str:
+        recent = [data[m]["intensity"] for m in months[-3:] if data[m]["intensity"] is not None]
+        prior  = [data[m]["intensity"] for m in months[-6:-3] if data[m]["intensity"] is not None]
+        if not recent or not prior:
+            return "→"
+        diff = sum(recent) / len(recent) - sum(prior) / len(prior)
+        if diff > 0.15:
+            return "↑"
+        if diff < -0.15:
+            return "↓"
+        return "→"
+
+    # Only show topics with meaningful average prominence (≥0.15 across all months)
+    active_topics = [t for t in WATCHLIST_NAMES if _topic_avg(theme_monthly[t]) >= 0.15]
     if not active_topics:
         return ""
+
+    # Build labelled copies — topic name + trend arrow as y-axis label
+    labelled_monthly = {}
+    active_labels = []
+    for t in active_topics:
+        label = f"{t}  {_trend_arrow(theme_monthly[t])}"
+        active_labels.append(label)
+        labelled_monthly[label] = theme_monthly[t]
 
     def _fmt(intensity, n):
         return f"Avg prominence: {intensity:.2f} / 3<br>Speeches: {n}"
 
     fig = _build_heatmap(
-        {t: theme_monthly[t] for t in active_topics},
-        active_topics, months, month_labels, fmt_intensity=_fmt,
+        labelled_monthly,
+        active_labels, months, month_labels, fmt_intensity=_fmt,
     )
     chart_html = pio.to_html(fig, include_plotlyjs=False, full_html=False,
                              config={"displayModeBar": False, "responsive": True})
