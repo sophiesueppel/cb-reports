@@ -680,3 +680,350 @@ SARB_MEETINGS = (
     SARB_MEETINGS_2021 + SARB_MEETINGS_2022 + SARB_MEETINGS_2023 +
     SARB_MEETINGS_2024 + SARB_MEETINGS_2025 + SARB_MEETINGS_2026
 )
+
+# ---------------------------------------------------------------------------
+# CNB (Czech National Bank) — Bank Board meets 8x/year
+# CNB was among the most hawkish CBs in 2021-2022, peaking at 7.00%
+# ---------------------------------------------------------------------------
+
+CNB_MEETINGS_2021 = [
+    {"date": "2021-02-04", "decision": "hold", "rate": "0.25%", "label": "Rates held"},
+    {"date": "2021-03-25", "decision": "hold", "rate": "0.25%", "label": "Rates held"},
+    {"date": "2021-05-06", "decision": "hold", "rate": "0.25%", "label": "Rates held"},
+    {"date": "2021-06-23", "decision": "hike", "rate": "0.50%", "label": "+25bp hike"},
+    {"date": "2021-08-05", "decision": "hike", "rate": "0.75%", "label": "+25bp hike"},
+    {"date": "2021-09-23", "decision": "hike", "rate": "1.50%", "label": "+75bp hike"},
+    {"date": "2021-11-04", "decision": "hike", "rate": "2.75%", "label": "+125bp hike"},
+    {"date": "2021-12-22", "decision": "hike", "rate": "3.75%", "label": "+100bp hike"},
+]
+
+CNB_MEETINGS_2022 = [
+    {"date": "2022-02-03", "decision": "hike", "rate": "4.50%", "label": "+75bp hike"},
+    {"date": "2022-03-31", "decision": "hike", "rate": "5.00%", "label": "+50bp hike"},
+    {"date": "2022-05-05", "decision": "hike", "rate": "5.75%", "label": "+75bp hike"},
+    {"date": "2022-06-22", "decision": "hike", "rate": "7.00%", "label": "+125bp hike"},
+    {"date": "2022-08-04", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2022-09-29", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2022-11-03", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2022-12-21", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+]
+
+CNB_MEETINGS_2023 = [
+    {"date": "2023-02-02", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-03-30", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-05-04", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-06-22", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-08-03", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-09-28", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-11-02", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-12-21", "decision": "cut",  "rate": "6.75%", "label": "-25bp cut"},
+]
+
+CNB_MEETINGS_2024 = [
+    {"date": "2024-02-08", "decision": "cut",  "rate": "6.25%", "label": "-50bp cut"},
+    {"date": "2024-03-20", "decision": "cut",  "rate": "5.75%", "label": "-50bp cut"},
+    {"date": "2024-05-02", "decision": "cut",  "rate": "5.25%", "label": "-50bp cut"},
+    {"date": "2024-06-20", "decision": "cut",  "rate": "4.75%", "label": "-50bp cut"},
+    {"date": "2024-08-01", "decision": "cut",  "rate": "4.50%", "label": "-25bp cut"},
+    {"date": "2024-09-26", "decision": "cut",  "rate": "4.25%", "label": "-25bp cut"},
+    {"date": "2024-11-07", "decision": "cut",  "rate": "4.00%", "label": "-25bp cut"},
+    {"date": "2024-12-19", "decision": "cut",  "rate": "3.75%", "label": "-25bp cut"},
+]
+
+CNB_MEETINGS_2025 = [
+    {"date": "2025-02-06", "decision": "cut",  "rate": "3.50%", "label": "-25bp cut"},
+    {"date": "2025-03-27", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2025-05-08", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2025-06-19", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2025-08-07", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2025-09-18", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2025-11-06", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2025-12-18", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+]
+
+CNB_MEETINGS_2026 = [
+    {"date": "2026-02-05", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2026-03-19", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2026-05-07", "decision": "hold", "rate": "3.50%", "label": "Rates held"},
+    {"date": "2026-06-18", "decision": "hike", "rate": "3.75%", "label": "+25bp hike"},
+    {"date": "2026-08-06", "decision": "upcoming", "label": "Aug 6"},
+    {"date": "2026-09-17", "decision": "upcoming", "label": "Sep 17"},
+    {"date": "2026-11-05", "decision": "upcoming", "label": "Nov 5"},
+    {"date": "2026-12-17", "decision": "upcoming", "label": "Dec 17"},
+]
+
+CNB_MEETINGS = (
+    CNB_MEETINGS_2021 + CNB_MEETINGS_2022 + CNB_MEETINGS_2023 +
+    CNB_MEETINGS_2024 + CNB_MEETINGS_2025 + CNB_MEETINGS_2026
+)
+
+# ---------------------------------------------------------------------------
+# NBP (Narodowy Bank Polski) — Monetary Policy Council (RPP), ~11 meetings/year
+# Reference rate (stopa referencyjna)
+# ---------------------------------------------------------------------------
+
+NBP_MEETINGS_2021 = [
+    {"date": "2021-01-13", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-02-03", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-03-03", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-04-07", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-05-05", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-06-09", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-07-07", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-09-08", "decision": "hold", "rate": "0.10%", "label": "Rates held"},
+    {"date": "2021-10-06", "decision": "hike", "rate": "0.50%", "label": "+40bp hike"},
+    {"date": "2021-11-03", "decision": "hike", "rate": "1.25%", "label": "+75bp hike"},
+    {"date": "2021-12-08", "decision": "hike", "rate": "1.75%", "label": "+50bp hike"},
+]
+
+NBP_MEETINGS_2022 = [
+    {"date": "2022-01-05", "decision": "hike", "rate": "2.25%", "label": "+50bp hike"},
+    {"date": "2022-02-09", "decision": "hike", "rate": "2.75%", "label": "+50bp hike"},
+    {"date": "2022-03-09", "decision": "hike", "rate": "3.50%", "label": "+75bp hike"},
+    {"date": "2022-04-06", "decision": "hike", "rate": "4.50%", "label": "+100bp hike"},
+    {"date": "2022-05-05", "decision": "hike", "rate": "5.25%", "label": "+75bp hike"},
+    {"date": "2022-06-08", "decision": "hike", "rate": "6.00%", "label": "+75bp hike"},
+    {"date": "2022-07-06", "decision": "hike", "rate": "6.50%", "label": "+50bp hike"},
+    {"date": "2022-09-07", "decision": "hike", "rate": "6.75%", "label": "+25bp hike"},
+    {"date": "2022-10-05", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2022-11-09", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2022-12-07", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+]
+
+NBP_MEETINGS_2023 = [
+    {"date": "2023-01-11", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2023-02-08", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2023-03-08", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2023-04-05", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2023-05-10", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2023-06-07", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2023-07-05", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2023-09-06", "decision": "cut",  "rate": "6.00%", "label": "-75bp cut"},
+    {"date": "2023-10-04", "decision": "cut",  "rate": "5.75%", "label": "-25bp cut"},
+    {"date": "2023-11-08", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2023-12-06", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+]
+
+NBP_MEETINGS_2024 = [
+    {"date": "2024-01-10", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-02-07", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-03-06", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-04-03", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-05-08", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-06-05", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-07-03", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-09-04", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-10-02", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-11-06", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2024-12-04", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+]
+
+NBP_MEETINGS_2025 = [
+    {"date": "2025-01-15", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2025-02-05", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2025-03-05", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2025-04-02", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2025-05-07", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2025-06-04", "decision": "hold", "rate": "5.75%", "label": "Rates held"},
+    {"date": "2025-07-09", "decision": "upcoming", "label": "Jul 9"},
+    {"date": "2025-09-03", "decision": "upcoming", "label": "Sep 3"},
+    {"date": "2025-10-08", "decision": "upcoming", "label": "Oct 8"},
+    {"date": "2025-11-05", "decision": "upcoming", "label": "Nov 5"},
+    {"date": "2025-12-03", "decision": "upcoming", "label": "Dec 3"},
+]
+
+NBP_MEETINGS_2026 = [
+    {"date": "2026-01-14", "decision": "upcoming", "label": "Jan 14"},
+    {"date": "2026-02-04", "decision": "upcoming", "label": "Feb 4"},
+    {"date": "2026-03-04", "decision": "upcoming", "label": "Mar 4"},
+    {"date": "2026-04-01", "decision": "upcoming", "label": "Apr 1"},
+    {"date": "2026-05-06", "decision": "upcoming", "label": "May 6"},
+    {"date": "2026-06-03", "decision": "upcoming", "label": "Jun 3"},
+    {"date": "2026-07-08", "decision": "upcoming", "label": "Jul 8"},
+    {"date": "2026-09-02", "decision": "upcoming", "label": "Sep 2"},
+    {"date": "2026-10-07", "decision": "upcoming", "label": "Oct 7"},
+    {"date": "2026-11-04", "decision": "upcoming", "label": "Nov 4"},
+    {"date": "2026-12-02", "decision": "upcoming", "label": "Dec 2"},
+]
+
+NBP_MEETINGS = (
+    NBP_MEETINGS_2021 + NBP_MEETINGS_2022 + NBP_MEETINGS_2023 +
+    NBP_MEETINGS_2024 + NBP_MEETINGS_2025 + NBP_MEETINGS_2026
+)
+
+# ---------------------------------------------------------------------------
+# BNR (Banca Națională a României) — Board, ~8 meetings/year
+# Key policy rate (rata dobânzii de politică monetară)
+# ---------------------------------------------------------------------------
+
+BNR_MEETINGS_2021 = [
+    {"date": "2021-01-15", "decision": "hold", "rate": "1.25%", "label": "Rates held"},
+    {"date": "2021-03-15", "decision": "hold", "rate": "1.25%", "label": "Rates held"},
+    {"date": "2021-05-12", "decision": "hold", "rate": "1.25%", "label": "Rates held"},
+    {"date": "2021-07-07", "decision": "hold", "rate": "1.25%", "label": "Rates held"},
+    {"date": "2021-08-06", "decision": "hike", "rate": "1.50%", "label": "+25bp hike"},
+    {"date": "2021-10-05", "decision": "hike", "rate": "1.75%", "label": "+25bp hike"},
+    {"date": "2021-11-09", "decision": "hike", "rate": "1.75%", "label": "Rates held"},
+    {"date": "2021-12-10", "decision": "hold", "rate": "1.75%", "label": "Rates held"},
+]
+
+BNR_MEETINGS_2022 = [
+    {"date": "2022-01-10", "decision": "hike", "rate": "2.00%", "label": "+25bp hike"},
+    {"date": "2022-02-09", "decision": "hike", "rate": "2.50%", "label": "+50bp hike"},
+    {"date": "2022-04-05", "decision": "hike", "rate": "3.00%", "label": "+50bp hike"},
+    {"date": "2022-05-10", "decision": "hike", "rate": "3.75%", "label": "+75bp hike"},
+    {"date": "2022-07-05", "decision": "hike", "rate": "4.75%", "label": "+100bp hike"},
+    {"date": "2022-08-05", "decision": "hike", "rate": "5.50%", "label": "+75bp hike"},
+    {"date": "2022-10-05", "decision": "hike", "rate": "6.25%", "label": "+75bp hike"},
+    {"date": "2022-11-08", "decision": "hike", "rate": "6.75%", "label": "+50bp hike"},
+]
+
+BNR_MEETINGS_2023 = [
+    {"date": "2023-01-10", "decision": "hike", "rate": "7.00%", "label": "+25bp hike"},
+    {"date": "2023-02-07", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-04-04", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-05-09", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-07-04", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-08-08", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-10-10", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2023-11-08", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+]
+
+BNR_MEETINGS_2024 = [
+    {"date": "2024-01-09", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2024-02-07", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2024-04-02", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2024-05-07", "decision": "hold", "rate": "7.00%", "label": "Rates held"},
+    {"date": "2024-07-05", "decision": "cut",  "rate": "6.75%", "label": "-25bp cut"},
+    {"date": "2024-08-06", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2024-10-08", "decision": "hold", "rate": "6.75%", "label": "Rates held"},
+    {"date": "2024-11-05", "decision": "cut",  "rate": "6.50%", "label": "-25bp cut"},
+]
+
+BNR_MEETINGS_2025 = [
+    {"date": "2025-01-14", "decision": "cut",  "rate": "6.25%", "label": "-25bp cut"},
+    {"date": "2025-02-11", "decision": "cut",  "rate": "6.00%", "label": "-25bp cut"},
+    {"date": "2025-04-08", "decision": "hold", "rate": "6.00%", "label": "Rates held"},
+    {"date": "2025-05-13", "decision": "hold", "rate": "6.00%", "label": "Rates held"},
+    {"date": "2025-07-08", "decision": "upcoming", "label": "Jul 8"},
+    {"date": "2025-08-05", "decision": "upcoming", "label": "Aug 5"},
+    {"date": "2025-10-07", "decision": "upcoming", "label": "Oct 7"},
+    {"date": "2025-11-11", "decision": "upcoming", "label": "Nov 11"},
+]
+
+BNR_MEETINGS_2026 = [
+    {"date": "2026-01-13", "decision": "upcoming", "label": "Jan 13"},
+    {"date": "2026-02-10", "decision": "upcoming", "label": "Feb 10"},
+    {"date": "2026-04-07", "decision": "upcoming", "label": "Apr 7"},
+    {"date": "2026-05-12", "decision": "upcoming", "label": "May 12"},
+    {"date": "2026-07-07", "decision": "upcoming", "label": "Jul 7"},
+    {"date": "2026-08-04", "decision": "upcoming", "label": "Aug 4"},
+    {"date": "2026-10-06", "decision": "upcoming", "label": "Oct 6"},
+    {"date": "2026-11-10", "decision": "upcoming", "label": "Nov 10"},
+]
+
+BNR_MEETINGS = (
+    BNR_MEETINGS_2021 + BNR_MEETINGS_2022 + BNR_MEETINGS_2023 +
+    BNR_MEETINGS_2024 + BNR_MEETINGS_2025 + BNR_MEETINGS_2026
+)
+
+# ---------------------------------------------------------------------------
+# CBRT (Central Bank of the Republic of Turkey) — MPC, ~8 meetings/year
+# 1-week repo rate (key policy rate)
+# ---------------------------------------------------------------------------
+
+CBRT_MEETINGS_2021 = [
+    {"date": "2021-01-21", "decision": "hold", "rate": "17.00%", "label": "Rates held"},
+    {"date": "2021-02-18", "decision": "hold", "rate": "17.00%", "label": "Rates held"},
+    {"date": "2021-03-18", "decision": "cut",  "rate": "19.00%",
+     "note": "Rate hiked to 19% then cut under Kavcioglu. Complex period.",
+     "label": "+200bp hike then cuts"},
+    {"date": "2021-04-15", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
+    {"date": "2021-05-06", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
+    {"date": "2021-06-17", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
+    {"date": "2021-07-15", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
+    {"date": "2021-08-12", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
+    {"date": "2021-09-23", "decision": "cut",  "rate": "18.00%", "label": "-100bp cut"},
+    {"date": "2021-10-21", "decision": "cut",  "rate": "16.00%", "label": "-200bp cut"},
+    {"date": "2021-11-18", "decision": "cut",  "rate": "15.00%", "label": "-100bp cut"},
+    {"date": "2021-12-16", "decision": "cut",  "rate": "14.00%", "label": "-100bp cut"},
+]
+
+CBRT_MEETINGS_2022 = [
+    {"date": "2022-01-20", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
+    {"date": "2022-02-17", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
+    {"date": "2022-03-17", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
+    {"date": "2022-04-14", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
+    {"date": "2022-05-26", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
+    {"date": "2022-06-23", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
+    {"date": "2022-07-21", "decision": "cut",  "rate": "13.00%", "label": "-100bp cut"},
+    {"date": "2022-08-18", "decision": "cut",  "rate": "12.00%", "label": "-100bp cut"},
+    {"date": "2022-09-22", "decision": "cut",  "rate": "11.00%", "label": "-100bp cut"},
+    {"date": "2022-10-20", "decision": "hold", "rate": "11.00%", "label": "Rates held"},
+    {"date": "2022-11-24", "decision": "hold", "rate": "11.00%", "label": "Rates held"},
+    {"date": "2022-12-22", "decision": "hold", "rate": "11.00%", "label": "Rates held"},
+]
+
+CBRT_MEETINGS_2023 = [
+    {"date": "2023-01-19", "decision": "hold", "rate": "9.00%",  "label": "Rates held"},
+    {"date": "2023-02-23", "decision": "cut",  "rate": "8.50%",  "label": "-50bp cut"},
+    {"date": "2023-03-23", "decision": "hold", "rate": "8.50%",  "label": "Rates held"},
+    {"date": "2023-04-27", "decision": "hold", "rate": "8.50%",  "label": "Rates held"},
+    {"date": "2023-05-25", "decision": "hold", "rate": "8.50%",  "label": "Rates held"},
+    {"date": "2023-06-22", "decision": "hike", "rate": "15.00%", "label": "+650bp hike (policy reversal)"},
+    {"date": "2023-07-20", "decision": "hike", "rate": "17.50%", "label": "+250bp hike"},
+    {"date": "2023-08-24", "decision": "hike", "rate": "25.00%", "label": "+750bp hike"},
+    {"date": "2023-09-21", "decision": "hike", "rate": "30.00%", "label": "+500bp hike"},
+    {"date": "2023-10-26", "decision": "hike", "rate": "35.00%", "label": "+500bp hike"},
+    {"date": "2023-11-23", "decision": "hike", "rate": "40.00%", "label": "+500bp hike"},
+    {"date": "2023-12-21", "decision": "hike", "rate": "42.50%", "label": "+250bp hike"},
+]
+
+CBRT_MEETINGS_2024 = [
+    {"date": "2024-01-25", "decision": "hike", "rate": "45.00%", "label": "+250bp hike"},
+    {"date": "2024-02-22", "decision": "hike", "rate": "45.00%",
+     "note": "Karahan becomes Governor Feb 2024",
+     "label": "Rates held (new Governor)"},
+    {"date": "2024-03-21", "decision": "hike", "rate": "50.00%", "label": "+500bp hike (peak)"},
+    {"date": "2024-04-25", "decision": "hold", "rate": "50.00%", "label": "Rates held"},
+    {"date": "2024-05-23", "decision": "hold", "rate": "50.00%", "label": "Rates held"},
+    {"date": "2024-06-20", "decision": "hold", "rate": "50.00%", "label": "Rates held"},
+    {"date": "2024-07-23", "decision": "hold", "rate": "50.00%", "label": "Rates held"},
+    {"date": "2024-09-19", "decision": "hold", "rate": "50.00%", "label": "Rates held"},
+    {"date": "2024-10-17", "decision": "hold", "rate": "50.00%", "label": "Rates held"},
+    {"date": "2024-11-21", "decision": "cut",  "rate": "47.50%", "label": "-250bp cut"},
+    {"date": "2024-12-26", "decision": "cut",  "rate": "45.00%", "label": "-250bp cut"},
+]
+
+CBRT_MEETINGS_2025 = [
+    {"date": "2025-01-23", "decision": "cut",  "rate": "42.50%", "label": "-250bp cut"},
+    {"date": "2025-02-20", "decision": "cut",  "rate": "40.00%", "label": "-250bp cut"},
+    {"date": "2025-03-20", "decision": "cut",  "rate": "37.50%", "label": "-250bp cut"},
+    {"date": "2025-04-17", "decision": "cut",  "rate": "35.00%", "label": "-250bp cut"},
+    {"date": "2025-05-22", "decision": "cut",  "rate": "32.50%", "label": "-250bp cut"},
+    {"date": "2025-06-19", "decision": "cut",  "rate": "30.00%", "label": "-250bp cut"},
+    {"date": "2025-07-24", "decision": "upcoming", "label": "Jul 24"},
+    {"date": "2025-09-18", "decision": "upcoming", "label": "Sep 18"},
+    {"date": "2025-10-23", "decision": "upcoming", "label": "Oct 23"},
+    {"date": "2025-11-20", "decision": "upcoming", "label": "Nov 20"},
+    {"date": "2025-12-25", "decision": "upcoming", "label": "Dec 25"},
+]
+
+CBRT_MEETINGS_2026 = [
+    {"date": "2026-01-22", "decision": "upcoming", "label": "Jan 22"},
+    {"date": "2026-02-19", "decision": "upcoming", "label": "Feb 19"},
+    {"date": "2026-03-19", "decision": "upcoming", "label": "Mar 19"},
+    {"date": "2026-04-23", "decision": "upcoming", "label": "Apr 23"},
+    {"date": "2026-05-21", "decision": "upcoming", "label": "May 21"},
+    {"date": "2026-06-18", "decision": "upcoming", "label": "Jun 18"},
+    {"date": "2026-07-23", "decision": "upcoming", "label": "Jul 23"},
+    {"date": "2026-09-17", "decision": "upcoming", "label": "Sep 17"},
+    {"date": "2026-10-22", "decision": "upcoming", "label": "Oct 22"},
+    {"date": "2026-11-19", "decision": "upcoming", "label": "Nov 19"},
+    {"date": "2026-12-24", "decision": "upcoming", "label": "Dec 24"},
+]
+
+CBRT_MEETINGS = (
+    CBRT_MEETINGS_2021 + CBRT_MEETINGS_2022 + CBRT_MEETINGS_2023 +
+    CBRT_MEETINGS_2024 + CBRT_MEETINGS_2025 + CBRT_MEETINGS_2026
+)

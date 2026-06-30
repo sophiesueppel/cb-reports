@@ -35,6 +35,9 @@ BANK_LABELS = {
     "Riksbank":        "Riksbank",
     "SARB":            "SARB",
     "CNB":             "CNB",
+    "NBP":             "NBP",
+    "BNR":             "BNR",
+    "CBRT":            "CBRT",
 }
 
 

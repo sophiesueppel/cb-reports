@@ -1,0 +1,38 @@
+title: Central Bank Speech Database
+description: Hawkishness ratings and full text of central bank speeches, rated by GPT-4.1
+databases:
+  speeches:
+    title: Speeches
+    description: All scraped speeches with sentiment scores where rated
+    tables:
+      speeches:
+        title: Speeches
+        description: One row per speech. score is 1 (dovish) to 10 (hawkish); NULL = not yet rated.
+        sort_desc: date
+        columns:
+          url: Source URL on the central bank website
+          date: Speech date (YYYY-MM-DD)
+          speaker: Full name and title of the speaker
+          title: Title of the speech
+          score: "Hawkishness score 1–10 rated by GPT-4.1 (NULL = unrated)"
+          justification: GPT-4.1 explanation of the score
+          rated_at: Timestamp when the speech was rated (UTC)
+          body: Full text of the speech
+          central_bank: Name of the central bank (e.g. Federal Reserve, ECB)
+          country: Country of the central bank
+    queries:
+      rated_speeches:
+        title: Rated speeches only
+        sql: SELECT date, speaker, title, score, justification, central_bank, url FROM speeches WHERE score IS NOT NULL ORDER BY date DESC
+      by_speaker:
+        title: Average score by speaker
+        sql: SELECT speaker, central_bank, ROUND(AVG(score),2) as avg_score, COUNT(*) as speeches FROM speeches WHERE score IS NOT NULL GROUP BY speaker, central_bank ORDER BY avg_score DESC
+      hawkish:
+        title: Most hawkish speeches (score >= 7)
+        sql: SELECT date, speaker, title, score, justification FROM speeches WHERE score >= 7 ORDER BY score DESC, date DESC
+      dovish:
+        title: Most dovish speeches (score <= 3)
+        sql: SELECT date, speaker, title, score, justification FROM speeches WHERE score <= 3 ORDER BY score ASC, date DESC
+      unrated:
+        title: Unrated speeches
+        sql: SELECT date, speaker, title, central_bank, url FROM speeches WHERE score IS NULL ORDER BY date DESC

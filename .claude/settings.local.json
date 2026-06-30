@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.federalreserve.gov)",
+      "Skill(artifact-design)",
+      "Artifact",
+      "PowerShell(cd \"C:\\\\Users\\\\SophieSueppel\\\\Desktop\\\\coding\\\\Central Bank Testimony ratings\"; \\(Get-Item report.html\\).Length / 1KB)",
+      "PowerShell(Start-Process \"C:\\\\Users\\\\SophieSueppel\\\\Desktop\\\\coding\\\\Central Bank Testimony ratings\\\\report.html\")"
+    ]
+  }
+}

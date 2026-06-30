@@ -127,7 +127,8 @@ def build_themes(
     if not os.environ.get("OPENAI_API_KEY"):
         sys.exit("Error: OPENAI_API_KEY not set.")
 
-    today = date.today().isoformat()
+    today = date.today()
+    this_month = today.strftime("%Y-%m")
 
     existing = {}
     if THEMES_PATH.exists():
@@ -136,15 +137,15 @@ def build_themes(
         except Exception:
             existing = {}
 
-    if not force and not dry_run and existing.get("built_at") == today:
-        print(f"Themes already built today ({today}). Use --force to rebuild.")
+    if not force and not dry_run and existing.get("built_at", "")[:7] == this_month:
+        print(f"Themes already built this month ({this_month}). Use --force to rebuild.")
         return
 
     from openai import OpenAI
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     output = {
-        "built_at": today,
+        "built_at": today.isoformat(),
         "watchlist": dict(existing.get("watchlist", {})),
         "structural": dict(existing.get("structural", {})),
         "banks": dict(existing.get("banks", {})),  # kept for backward compat

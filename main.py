@@ -28,6 +28,9 @@ from report_bcb_filtered import generate_bcb_filtered_report
 from report_riksbank_filtered import generate_riksbank_filtered_report
 from report_sarb_filtered import generate_sarb_filtered_report
 from report_cnb_filtered import generate_cnb_filtered_report
+from report_nbp_filtered import generate_nbp_filtered_report
+from report_bnr_filtered import generate_bnr_filtered_report
+from report_cbrt_filtered import generate_cbrt_filtered_report
 from classify_relevance_llm import run_classification
 from check_members import check_all as check_members
 
@@ -64,6 +67,9 @@ BCB_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_bcb_filtered.html"
 RIKSBANK_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_riksbank_filtered.html"
 SARB_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_sarb_filtered.html"
 CNB_REPORT_URL  = f"{GITHUB_PAGES_BASE}/report_cnb_filtered.html"
+NBP_REPORT_URL  = f"{GITHUB_PAGES_BASE}/report_nbp_filtered.html"
+BNR_REPORT_URL  = f"{GITHUB_PAGES_BASE}/report_bnr_filtered.html"
+CBRT_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_cbrt_filtered.html"
 
 # Keep old name as alias for backward compat
 REPORT_URL = FED_REPORT_URL
@@ -77,6 +83,9 @@ def slack_notify_combined(
     bcb_speeches: list[dict] = None,
     riksbank_speeches: list[dict] = None,
     sarb_speeches: list[dict] = None,
+    nbp_speeches: list[dict] = None,
+    bnr_speeches: list[dict] = None,
+    cbrt_speeches: list[dict] = None,
 ) -> None:
     webhook = os.environ.get("SLACK_WEBHOOK_URL")
     if not webhook:
@@ -87,7 +96,12 @@ def slack_notify_combined(
     bcb_speeches = bcb_speeches or []
     riksbank_speeches = riksbank_speeches or []
     sarb_speeches = sarb_speeches or []
-    total = len(fed_speeches) + len(ecb_speeches) + len(boe_speeches) + len(boj_speeches) + len(bcb_speeches) + len(riksbank_speeches) + len(sarb_speeches)
+    nbp_speeches = nbp_speeches or []
+    bnr_speeches = bnr_speeches or []
+    cbrt_speeches = cbrt_speeches or []
+    total = (len(fed_speeches) + len(ecb_speeches) + len(boe_speeches) + len(boj_speeches) +
+             len(bcb_speeches) + len(riksbank_speeches) + len(sarb_speeches) +
+             len(nbp_speeches) + len(bnr_speeches) + len(cbrt_speeches))
     if total == 0:
         return
 
@@ -153,6 +167,30 @@ def slack_notify_combined(
                 "text": f"{e} *{sp['score']}/10 — {t}*\n*<{sp['url']}|{sp['title']}>*\n{sp['speaker']} · {sp['date']}\n_{sp['justification']}_"}})
             blocks.append({"type": "divider"})
 
+    if nbp_speeches:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*\U0001f1f5\U0001f1f1 Narodowy Bank Polski*"}})
+        for sp in nbp_speeches:
+            t, e = _tone(sp["score"]), _emoji(sp["score"])
+            blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                "text": f"{e} *{sp['score']}/10 — {t}*\n*<{sp['url']}|{sp['title']}>*\n{sp['speaker']} · {sp['date']}\n_{sp['justification']}_"}})
+            blocks.append({"type": "divider"})
+
+    if bnr_speeches:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*\U0001f1f7\U0001f1f4 Banca Națională a României*"}})
+        for sp in bnr_speeches:
+            t, e = _tone(sp["score"]), _emoji(sp["score"])
+            blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                "text": f"{e} *{sp['score']}/10 — {t}*\n*<{sp['url']}|{sp['title']}>*\n{sp['speaker']} · {sp['date']}\n_{sp['justification']}_"}})
+            blocks.append({"type": "divider"})
+
+    if cbrt_speeches:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*\U0001f1f9\U0001f1f7 Central Bank of Turkey*"}})
+        for sp in cbrt_speeches:
+            t, e = _tone(sp["score"]), _emoji(sp["score"])
+            blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                "text": f"{e} *{sp['score']}/10 — {t}*\n*<{sp['url']}|{sp['title']}>*\n{sp['speaker']} · {sp['date']}\n_{sp['justification']}_"}})
+            blocks.append({"type": "divider"})
+
     buttons = [{"type": "button", "text": {"type": "plain_text", "text": "Fed Report"},
                 "url": FED_REPORT_URL, "style": "primary"}]
     if ECB_REPORT_URL:
@@ -173,6 +211,15 @@ def slack_notify_combined(
     if SARB_REPORT_URL:
         buttons.append({"type": "button", "text": {"type": "plain_text", "text": "SARB Report"},
                         "url": SARB_REPORT_URL})
+    if NBP_REPORT_URL:
+        buttons.append({"type": "button", "text": {"type": "plain_text", "text": "NBP Report"},
+                        "url": NBP_REPORT_URL})
+    if BNR_REPORT_URL:
+        buttons.append({"type": "button", "text": {"type": "plain_text", "text": "BNR Report"},
+                        "url": BNR_REPORT_URL})
+    if CBRT_REPORT_URL:
+        buttons.append({"type": "button", "text": {"type": "plain_text", "text": "CBRT Report"},
+                        "url": CBRT_REPORT_URL})
     blocks.append({"type": "actions", "elements": buttons})
 
     payload = json.dumps({"blocks": blocks}).encode()
@@ -351,6 +398,114 @@ def run_riksbank_daily() -> list[dict]:
     return rated_rows
 
 
+def run_nbp_daily() -> list[dict]:
+    """Check for new NBP speeches via BIS, rate them, regenerate NBP report."""
+    from scraper_nbp import get_new_nbp_speeches, save_rating as nbp_save_rating
+    print("\n--- Narodowy Bank Polski (NBP) ---")
+    new_speeches = get_new_nbp_speeches()
+    rated_rows = []
+
+    for sp in new_speeches:
+        print(f"  Rating: {sp['speaker']} | {sp['title'][:60]}")
+        try:
+            lang = sp.get("language", "en")
+            body_en = sp.get("body_en") or ""
+            if lang != "en" and not body_en:
+                from translator import translate_speech
+                print(f"    Translating ({lang}) ...")
+                body_en = translate_speech(sp["body"], lang, title=sp["title"], speaker=sp["speaker"])
+            rating = rate_speech(sp["title"], sp["speaker"], sp["date"], sp["body"],
+                                 bank="NBP", db_path=str(DB_PATH),
+                                 language=lang, body_en=body_en)
+            now = datetime.now(timezone.utc).isoformat()
+            nbp_save_rating(sp["url"], rating["score"], rating["justification"], now,
+                            body_en=body_en if body_en else None)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
+            sp["score"] = rating["score"]
+            sp["justification"] = rating["justification"]
+            rated_rows.append(sp)
+            print(f"    Score: {rating['score']}/10 — {rating['justification'][:70]}...")
+        except Exception as e:
+            print(f"    Error rating {sp['url']}: {e}")
+        time.sleep(0.3)
+
+    run_classification(bank="NBP")
+    generate_nbp_filtered_report()
+    return rated_rows
+
+
+def run_bnr_daily() -> list[dict]:
+    """Check for new BNR speeches via BIS, rate them, regenerate BNR report."""
+    from scraper_bnr import get_new_bnr_speeches, save_rating as bnr_save_rating
+    print("\n--- Banca Națională a României (BNR) ---")
+    new_speeches = get_new_bnr_speeches()
+    rated_rows = []
+
+    for sp in new_speeches:
+        print(f"  Rating: {sp['speaker']} | {sp['title'][:60]}")
+        try:
+            lang = sp.get("language", "en")
+            body_en = sp.get("body_en") or ""
+            if lang != "en" and not body_en:
+                from translator import translate_speech
+                print(f"    Translating ({lang}) ...")
+                body_en = translate_speech(sp["body"], lang, title=sp["title"], speaker=sp["speaker"])
+            rating = rate_speech(sp["title"], sp["speaker"], sp["date"], sp["body"],
+                                 bank="BNR", db_path=str(DB_PATH),
+                                 language=lang, body_en=body_en)
+            now = datetime.now(timezone.utc).isoformat()
+            bnr_save_rating(sp["url"], rating["score"], rating["justification"], now,
+                            body_en=body_en if body_en else None)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
+            sp["score"] = rating["score"]
+            sp["justification"] = rating["justification"]
+            rated_rows.append(sp)
+            print(f"    Score: {rating['score']}/10 — {rating['justification'][:70]}...")
+        except Exception as e:
+            print(f"    Error rating {sp['url']}: {e}")
+        time.sleep(0.3)
+
+    run_classification(bank="BNR")
+    generate_bnr_filtered_report()
+    return rated_rows
+
+
+def run_cbrt_daily() -> list[dict]:
+    """Check for new CBRT speeches via BIS, rate them, regenerate CBRT report."""
+    from scraper_cbrt import get_new_cbrt_speeches, save_rating as cbrt_save_rating
+    print("\n--- Central Bank of Turkey (CBRT) ---")
+    new_speeches = get_new_cbrt_speeches()
+    rated_rows = []
+
+    for sp in new_speeches:
+        print(f"  Rating: {sp['speaker']} | {sp['title'][:60]}")
+        try:
+            lang = sp.get("language", "en")
+            body_en = sp.get("body_en") or ""
+            if lang != "en" and not body_en:
+                from translator import translate_speech
+                print(f"    Translating ({lang}) ...")
+                body_en = translate_speech(sp["body"], lang, title=sp["title"], speaker=sp["speaker"])
+            rating = rate_speech(sp["title"], sp["speaker"], sp["date"], sp["body"],
+                                 bank="CBRT", db_path=str(DB_PATH),
+                                 language=lang, body_en=body_en)
+            now = datetime.now(timezone.utc).isoformat()
+            cbrt_save_rating(sp["url"], rating["score"], rating["justification"], now,
+                             body_en=body_en if body_en else None)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
+            sp["score"] = rating["score"]
+            sp["justification"] = rating["justification"]
+            rated_rows.append(sp)
+            print(f"    Score: {rating['score']}/10 — {rating['justification'][:70]}...")
+        except Exception as e:
+            print(f"    Error rating {sp['url']}: {e}")
+        time.sleep(0.3)
+
+    run_classification(bank="CBRT")
+    generate_cbrt_filtered_report()
+    return rated_rows
+
+
 def run_cnb_daily() -> list[dict]:
     """Check for new CNB Bank Board speeches, rate them, regenerate CNB report."""
     from scraper_cnb import get_new_cnb_speeches, save_rating as cnb_save_rating
@@ -466,6 +621,9 @@ def push_reports_to_github() -> None:
         "report_riksbank_filtered.html",
         "report_sarb_filtered.html",
         "report_cnb_filtered.html",
+        "report_nbp_filtered.html",
+        "report_bnr_filtered.html",
+        "report_cbrt_filtered.html",
         "report_global_themes.html",
     ]
     try:
@@ -571,13 +729,23 @@ def main() -> None:
     # --- CNB ---
     cnb_new = run_cnb_daily()
 
+    # --- NBP ---
+    nbp_new = run_nbp_daily()
+
+    # --- BNR ---
+    bnr_new = run_bnr_daily()
+
+    # --- CBRT ---
+    cbrt_new = run_cbrt_daily()
+
     # --- Global overview ---
     print("\nRegenerating global themes overview ...")
     from report_global_themes import generate_global_themes_report
     generate_global_themes_report()
 
     # --- Emerging topics scan ---
-    all_new = fed_new + ecb_new + boe_new + boj_new + bcb_new + riksbank_new + sarb_new + cnb_new
+    all_new = (fed_new + ecb_new + boe_new + boj_new + bcb_new +
+               riksbank_new + sarb_new + cnb_new + nbp_new + bnr_new + cbrt_new)
     if all_new:
         from detect_emerging_topics import run_emerging_scan
         run_emerging_scan(all_new)

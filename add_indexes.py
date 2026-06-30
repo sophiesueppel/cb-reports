@@ -1,0 +1,10 @@
+import sqlite3
+conn = sqlite3.connect("data/speeches.db")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_bank ON speeches(central_bank)")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_date ON speeches(date)")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_speaker ON speeches(speaker)")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_score ON speeches(score)")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_date ON speeches(central_bank, date)")
+conn.commit()
+conn.close()
+print("Indexes created.")
