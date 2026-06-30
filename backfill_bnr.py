@@ -27,8 +27,7 @@ from report_bnr_filtered import generate_bnr_filtered_report
 
 def main():
     today = datetime.now()
-    cutoff = datetime(today.year - 1, today.month, today.day)
-    start_year = cutoff.year
+    start_year = 2016  # full history
 
     print(f"=== BNR Backfill: {start_year}–{today.year} ===")
     speeches = get_all_bnr_speeches(start_year=start_year)

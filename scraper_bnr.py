@@ -8,10 +8,12 @@ BNR is primarily represented internationally by Governor Isarescu, who has
 held the role since 1990. Coverage on BIS is good for his international speeches.
 """
 
+import html as html_module
 import io
 import re
 import sqlite3
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -48,13 +50,14 @@ _BNR_HISTORICAL = _BNR_CURRENT | {
     "Cristian Popa",
     "Nicolae Cinteza",
     "Virgil Stoenescu",
+    "Liviu Voinea",
 }
 
 ALL_BNR = _BNR_HISTORICAL
 
 _BNR_SURNAMES = [
     "Isarescu", "Georgescu", "Badea", "Nicolaescu", "Balint",
-    "Olteanu", "Popa",
+    "Olteanu", "Popa", "Voinea",
 ]
 
 _ALIASES = {
@@ -65,7 +68,14 @@ _ALIASES = {
     "Balint":     "Csaba Balint",
     "Olteanu":    "Bogdan Olteanu",
     "Popa":       "Cristian Popa",
+    "Voinea":     "Liviu Voinea",
 }
+
+def _ascii_fold(s: str) -> str:
+    """Decode HTML entities then strip diacritics to ASCII (e.g. Is&#259;rescu → Isarescu)."""
+    decoded = html_module.unescape(s)
+    return unicodedata.normalize("NFKD", decoded).encode("ascii", "ignore").decode("ascii")
+
 
 _TITLE_PREFIX_RE = re.compile(
     r"^(?:Mr\.?\s+|Ms\.?\s+|Dr\.?\s+|Governor\s+|Deputy\s+Governor\s+|Prof\.?\s+)",
@@ -88,7 +98,11 @@ def _normalize_speaker(raw: str) -> str:
     if name in ALL_BNR:
         return name
     last = name.split()[-1] if name else ""
-    return _ALIASES.get(last, name)
+    # Try exact match first, then ASCII-folded match
+    if last in _ALIASES:
+        return _ALIASES[last]
+    folded_last = _ascii_fold(last)
+    return _ALIASES.get(folded_last, name)
 
 
 def _parse_date(text: str) -> str:
@@ -100,7 +114,8 @@ def _parse_date(text: str) -> str:
 
 
 def _matches_bnr(title_raw: str) -> bool:
-    return any(s in title_raw for s in _BNR_SURNAMES)
+    folded = _ascii_fold(title_raw)
+    return any(s in folded for s in _BNR_SURNAMES)
 
 
 # ── DB helpers ───────────────────────────────────────────────────────────────
@@ -271,7 +286,7 @@ def get_all_bnr_speeches(start_year: int = 2021, end_year: int = None) -> list[d
 
     speeches = []
     for path, item in doc_list.items():
-        title_raw = item.get("short_title", "")
+        title_raw = html_module.unescape(item.get("short_title", "").strip())
         pub_date = item.get("publication_start_date", "")
         if not pub_date or pub_date < cutoff or pub_date > end_date:
             continue
@@ -340,7 +355,7 @@ def get_new_bnr_speeches() -> list[dict]:
 
     candidates = []
     for path, item in doc_list.items():
-        title_raw = item.get("short_title", "")
+        title_raw = html_module.unescape(item.get("short_title", "").strip())
         pub_date = item.get("publication_start_date", "")
         if not pub_date or pub_date < cutoff or pub_date > end_date:
             continue
