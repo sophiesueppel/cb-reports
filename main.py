@@ -27,6 +27,7 @@ from report_boj_filtered import generate_boj_filtered_report
 from report_bcb_filtered import generate_bcb_filtered_report
 from report_riksbank_filtered import generate_riksbank_filtered_report
 from report_sarb_filtered import generate_sarb_filtered_report
+from report_cnb_filtered import generate_cnb_filtered_report
 from classify_relevance_llm import run_classification
 from check_members import check_all as check_members
 
@@ -35,7 +36,7 @@ load_dotenv(Path(__file__).parent / ".env")
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-DB_PATH = Path("data/speeches.db")
+DB_PATH = Path(os.environ.get("CB_DB_PATH", "data/speeches.db"))
 COLUMNS = ["url", "date", "speaker", "title", "score", "justification", "rated_at"]
 
 _CREATE_TABLE = """
@@ -62,6 +63,7 @@ BOJ_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_boj_filtered.html"
 BCB_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_bcb_filtered.html"
 RIKSBANK_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_riksbank_filtered.html"
 SARB_REPORT_URL = f"{GITHUB_PAGES_BASE}/report_sarb_filtered.html"
+CNB_REPORT_URL  = f"{GITHUB_PAGES_BASE}/report_cnb_filtered.html"
 
 # Keep old name as alias for backward compat
 REPORT_URL = FED_REPORT_URL
@@ -193,6 +195,23 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
+def save_topic_scores(url: str, topic_scores: dict | None) -> None:
+    """Persist topic_scores JSON for a speech. Adds the column if missing."""
+    if not topic_scores:
+        return
+    conn = _conn()
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(speeches)")}
+    if "topic_scores" not in cols:
+        conn.execute("ALTER TABLE speeches ADD COLUMN topic_scores TEXT")
+        conn.commit()
+    conn.execute(
+        "UPDATE speeches SET topic_scores=? WHERE url=?",
+        (json.dumps(topic_scores), url),
+    )
+    conn.commit()
+    conn.close()
+
+
 def load_data() -> pd.DataFrame:
     conn = _conn()
     df = pd.read_sql("SELECT * FROM speeches", conn)
@@ -237,6 +256,7 @@ def run_boe_daily() -> list[dict]:
                                  bank="Bank of England", db_path=str(DB_PATH))
             now = datetime.now(timezone.utc).isoformat()
             boe_save_rating(sp["url"], rating["score"], rating["justification"], now)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
             sp["score"] = rating["score"]
             sp["justification"] = rating["justification"]
             rated_rows.append(sp)
@@ -263,6 +283,7 @@ def run_boj_daily() -> list[dict]:
                                  bank="Bank of Japan", db_path=str(DB_PATH))
             now = datetime.now(timezone.utc).isoformat()
             boj_save_rating(sp["url"], rating["score"], rating["justification"], now)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
             sp["score"] = rating["score"]
             sp["justification"] = rating["justification"]
             rated_rows.append(sp)
@@ -289,6 +310,7 @@ def run_bcb_daily() -> list[dict]:
                                  bank="BCB", db_path=str(DB_PATH))
             now = datetime.now(timezone.utc).isoformat()
             bcb_save_rating(sp["url"], rating["score"], rating["justification"], now)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
             sp["score"] = rating["score"]
             sp["justification"] = rating["justification"]
             rated_rows.append(sp)
@@ -315,6 +337,7 @@ def run_riksbank_daily() -> list[dict]:
                                  bank="Riksbank", db_path=str(DB_PATH))
             now = datetime.now(timezone.utc).isoformat()
             riksbank_save_rating(sp["url"], rating["score"], rating["justification"], now)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
             sp["score"] = rating["score"]
             sp["justification"] = rating["justification"]
             rated_rows.append(sp)
@@ -325,6 +348,34 @@ def run_riksbank_daily() -> list[dict]:
 
     run_classification(bank="Riksbank")
     generate_riksbank_filtered_report()
+    return rated_rows
+
+
+def run_cnb_daily() -> list[dict]:
+    """Check for new CNB Bank Board speeches, rate them, regenerate CNB report."""
+    from scraper_cnb import get_new_cnb_speeches, save_rating as cnb_save_rating
+    print("\n--- Czech National Bank ---")
+    new_speeches = get_new_cnb_speeches()
+    rated_rows = []
+
+    for sp in new_speeches:
+        print(f"  Rating: {sp['speaker']} | {sp['title'][:60]}")
+        try:
+            rating = rate_speech(sp["title"], sp["speaker"], sp["date"], sp["body"],
+                                 bank="CNB", db_path=str(DB_PATH))
+            now = datetime.now(timezone.utc).isoformat()
+            cnb_save_rating(sp["url"], rating["score"], rating["justification"], now)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
+            sp["score"] = rating["score"]
+            sp["justification"] = rating["justification"]
+            rated_rows.append(sp)
+            print(f"    Score: {rating['score']}/10 — {rating['justification'][:70]}...")
+        except Exception as e:
+            print(f"    Error rating {sp['url']}: {e}")
+        time.sleep(0.3)
+
+    run_classification(bank="CNB")
+    generate_cnb_filtered_report()
     return rated_rows
 
 
@@ -341,6 +392,7 @@ def run_sarb_daily() -> list[dict]:
                                  bank="SARB", db_path=str(DB_PATH))
             now = datetime.now(timezone.utc).isoformat()
             sarb_save_rating(sp["url"], rating["score"], rating["justification"], now)
+            save_topic_scores(sp["url"], rating.get("topic_scores"))
             sp["score"] = rating["score"]
             sp["justification"] = rating["justification"]
             rated_rows.append(sp)
@@ -413,6 +465,8 @@ def push_reports_to_github() -> None:
         "report_bcb_filtered.html",
         "report_riksbank_filtered.html",
         "report_sarb_filtered.html",
+        "report_cnb_filtered.html",
+        "report_global_themes.html",
     ]
     try:
         subprocess.run(["git", "add"] + reports, check=True, capture_output=True)
@@ -486,6 +540,7 @@ def main() -> None:
             "country":       "USA",
         }
         save_row(row)
+        save_topic_scores(speech.url, rating.get("topic_scores"))
         fed_new = [row]
 
         print(f"\nResult:")
@@ -513,9 +568,19 @@ def main() -> None:
     # --- SARB ---
     sarb_new = run_sarb_daily()
 
-    # --- Combined Slack ---
-    if fed_new or ecb_new or boe_new or boj_new or bcb_new or riksbank_new or sarb_new:
-        slack_notify_combined(fed_new, ecb_new, boe_new, boj_new, bcb_new, riksbank_new, sarb_new)
+    # --- CNB ---
+    cnb_new = run_cnb_daily()
+
+    # --- Global overview ---
+    print("\nRegenerating global themes overview ...")
+    from report_global_themes import generate_global_themes_report
+    generate_global_themes_report()
+
+    # --- Emerging topics scan ---
+    all_new = fed_new + ecb_new + boe_new + boj_new + bcb_new + riksbank_new + sarb_new + cnb_new
+    if all_new:
+        from detect_emerging_topics import run_emerging_scan
+        run_emerging_scan(all_new)
 
     # --- Push updated reports to GitHub Pages ---
     print("\nPushing reports to GitHub Pages ...")
@@ -537,10 +602,12 @@ def run_boj_batch(start_year: int = 2021) -> None:
     print(f"\n--- Bank of Japan batch ({start_year}–{current_year}) ---")
     new_speeches = get_all_boj_speeches(start_year=start_year, end_year=current_year)
 
+    from translator import translate_speech
+
     # Also pick up any previously stored but unrated speeches within the 5-year window
     conn = _conn()
     unrated = conn.execute(
-        "SELECT url, date, speaker, title, body FROM speeches "
+        "SELECT url, date, speaker, title, body, language, body_en FROM speeches "
         "WHERE central_bank='Bank of Japan' AND score IS NULL AND date >= ? AND body IS NOT NULL AND body != ''",
         (cutoff,),
     ).fetchall()
@@ -549,9 +616,10 @@ def run_boj_batch(start_year: int = 2021) -> None:
     already = {s["url"] for s in new_speeches}
     from scraper_boj import ALL_BOJ_BOARD
     for row in unrated:
-        url, date, speaker, title, body = row
+        url, date, speaker, title, body, lang, body_en = row
         if url not in already and speaker in ALL_BOJ_BOARD:
-            new_speeches.append({"url": url, "date": date, "speaker": speaker, "title": title, "body": body})
+            new_speeches.append({"url": url, "date": date, "speaker": speaker, "title": title,
+                                  "body": body, "language": lang or "en", "body_en": body_en or ""})
 
     # Filter to last 5 years for rating (no point burning API on older speeches that won't appear in report)
     to_rate = [s for s in new_speeches if s.get("date", "") >= cutoff]
@@ -564,10 +632,18 @@ def run_boj_batch(start_year: int = 2021) -> None:
             print(f"  Skipped — off-topic title filter")
             continue
         try:
+            lang = sp.get("language", "en")
+            body_en = sp.get("body_en") or ""
+            if lang != "en" and not body_en:
+                print(f"  Translating (ja) ...")
+                body_en = translate_speech(sp["body"], lang, title=sp["title"], speaker=sp["speaker"])
+                time.sleep(0.2)
             rating = rate_speech(sp["title"], sp["speaker"], sp["date"], sp["body"],
-                                 bank="Bank of Japan", db_path=str(DB_PATH))
+                                 bank="Bank of Japan", db_path=str(DB_PATH),
+                                 language=lang, body_en=body_en)
             now = datetime.now(timezone.utc).isoformat()
-            boj_save_rating(sp["url"], rating["score"], rating["justification"], now)
+            boj_save_rating(sp["url"], rating["score"], rating["justification"], now,
+                            body_en=body_en if body_en else None)
             print(f"  Score: {rating['score']}/10 — {rating['justification'][:70]}...")
         except Exception as e:
             print(f"  Error: {e}")

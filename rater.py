@@ -118,7 +118,7 @@ def score_topics(text: str, title: str = "", bank: str = "") -> dict:
     user_msg = (
         f'Title: "{title}"\n'
         f"Bank: {bank or 'Unknown'}\n\n"
-        f"---\n\n{text[:8000]}"
+        f"---\n\n{text}"
     )
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
