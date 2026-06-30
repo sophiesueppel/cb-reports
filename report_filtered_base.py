@@ -274,6 +274,58 @@ def _score_themes(body: str, theme_patterns: dict) -> dict:
     return {theme: len(pat.findall(body_lower)) for theme, pat in theme_patterns.items()}
 
 
+def build_month_list(n: int = 12) -> tuple[list, list]:
+    """Return (ISO month keys, human labels) for the last n months, oldest first."""
+    today = date.today()
+    months, labels = [], []
+    for i in range(n - 1, -1, -1):
+        m = today.month - i
+        y = today.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        months.append(f"{y}-{m:02d}")
+        labels.append(f"{_MON_ABBR[m-1]} {y}")
+    return months, labels
+
+
+def compile_theme_patterns(themes_dict: dict) -> dict:
+    """Compile a regex pattern per theme from a {theme: [keywords]} dict."""
+    patterns = {}
+    for theme, terms in themes_dict.items():
+        if not terms:
+            continue
+        patterns[theme] = re.compile(
+            r'\b(' + '|'.join(re.escape(t.lower()) for t in terms) + r')\b'
+        )
+    return patterns
+
+
+def score_themes_monthly(
+    df: pd.DataFrame,
+    theme_patterns: dict,
+    months: list,
+    min_speeches: int = 2,
+) -> dict:
+    """Score a DataFrame of speeches against theme patterns, aggregated by month.
+
+    Returns {theme: {month: {"intensity": float|None, "n": int}}}.
+    Months with fewer than min_speeches get intensity=None (rendered as grey).
+    df must have a "month" column (YYYY-MM) and a "_scores" column already computed.
+    """
+    result = {theme: {} for theme in theme_patterns}
+    for month in months:
+        rows = df[df["month"] == month]
+        n = len(rows)
+        for theme in theme_patterns:
+            if n < min_speeches:
+                result[theme][month] = {"intensity": None, "n": n}
+            else:
+                vals = [r["_scores"][theme] for _, r in rows.iterrows()]
+                result[theme][month] = {"intensity": sum(vals) / n, "n": n}
+    return result
+
+
 def _p90(values: list) -> float:
     """90th-percentile of a list (no numpy)."""
     if not values:
@@ -283,7 +335,7 @@ def _p90(values: list) -> float:
     return float(s[idx]) or 1.0
 
 
-def _build_heatmap(theme_monthly: dict, themes: list, months: list, month_labels: list) -> go.Figure:
+def _build_heatmap(theme_monthly: dict, themes: list, months: list, month_labels: list, fmt_intensity=None) -> go.Figure:
     """Build a heatmap from pre-computed monthly theme data.
 
     Sparse months (<2 speeches) → grey sentinel cell.
@@ -314,11 +366,11 @@ def _build_heatmap(theme_monthly: dict, themes: list, months: list, month_labels
                 cd_row.append(f"<b>{theme}</b><br>{ml}<br><i style='color:#9CA3AF'>{note}</i>")
             else:
                 z_row.append(min(intensity, zmax))  # cap at p90 for display
-                cd_row.append(
-                    f"<b>{theme}</b><br>{ml}<br>"
-                    f"Avg mentions/speech: {intensity:.2f}<br>"
-                    f"Speeches: {n}"
-                )
+                if fmt_intensity:
+                    detail = fmt_intensity(intensity, n)
+                else:
+                    detail = f"Avg mentions/speech: {intensity:.2f}<br>Speeches: {n}"
+                cd_row.append(f"<b>{theme}</b><br>{ml}<br>{detail}")
         z.append(z_row)
         customdata.append(cd_row)
 
@@ -392,101 +444,70 @@ def _section_html(title: str, chart_html: str) -> str:
     )
 
 
-def make_theme_chart(bank_db_name: str, df: pd.DataFrame) -> str:
-    """Return two Plotly chart sections: Macro Watchlist + Structural Themes."""
-    if not THEMES_PATH.exists():
-        return ""
-    try:
-        themes_data = json.loads(THEMES_PATH.read_text(encoding="utf-8"))
-    except Exception:
+def make_watchlist_chart(df: pd.DataFrame) -> str:
+    """Return the Macro Watchlist heatmap section.
+
+    Reads LLM-scored topic_scores from the DataFrame (stored as JSON in the DB column).
+    Intensity = fraction of speeches per month that substantively discussed each topic.
+    """
+    from topics import WATCHLIST_NAMES
+
+    if "topic_scores" not in df.columns:
         return ""
 
-    bank_themes = themes_data.get("structural") or themes_data.get("banks", {}).get(bank_db_name) or {}
-    watchlist   = themes_data.get("watchlist", {})
-    if not watchlist and not bank_themes:
-        return ""
-
-    # Filter to relevant scored speeches with bodies, last 12 months
     today = date.today()
     cutoff_12m = date(today.year - 1, today.month, today.day).isoformat()
     df_w = df[
         (df["score"] > 0) &
-        df["body"].notna() &
-        (df["body"] != "") &
-        (df["body"] != "nan") &
+        df["topic_scores"].notna() &
         (df["date"] >= cutoff_12m)
     ].copy()
     if df_w.empty:
         return ""
 
     df_w["month"] = df_w["date"].str[:7]
+    months, month_labels = build_month_list(12)
 
-    # Build last 12 month ISO keys + human-readable labels
-    months, month_labels = [], []
-    for i in range(11, -1, -1):
-        m = today.month - i
-        y = today.year
-        while m <= 0:
-            m += 12
-            y -= 1
-        months.append(f"{y}-{m:02d}")
-        month_labels.append(f"{_MON_ABBR[m-1]} {y}")
+    df_w["_ts"] = df_w["topic_scores"].apply(
+        lambda s: json.loads(s) if isinstance(s, str) else {}
+    )
 
-    # Compile patterns for ALL themes
-    all_themes = {**bank_themes, **watchlist}
-    theme_patterns = {}
-    for theme, terms in all_themes.items():
-        if not terms:
-            continue
-        theme_patterns[theme] = re.compile(
-            r'\b(' + '|'.join(re.escape(t.lower()) for t in terms) + r')\b'
+    theme_monthly = {}
+    for topic in WATCHLIST_NAMES:
+        theme_monthly[topic] = {}
+        for month in months:
+            rows = df_w[df_w["month"] == month]
+            n = len(rows)
+            if n < 2:
+                theme_monthly[topic][month] = {"intensity": None, "n": n}
+            else:
+                discussed = sum(1 for _, r in rows.iterrows() if r["_ts"].get(topic, 0) >= 1)
+                theme_monthly[topic][month] = {"intensity": discussed / n, "n": n}
+
+    # Only show topics this bank actually discussed at least once
+    active_topics = [
+        t for t in WATCHLIST_NAMES
+        if any(
+            v["intensity"] is not None and v["intensity"] > 0
+            for v in theme_monthly[t].values()
         )
-
-    if not theme_patterns:
+    ]
+    if not active_topics:
         return ""
 
-    # Score every speech once against all themes
-    df_w["_scores"] = df_w["body"].apply(lambda b: _score_themes(b, theme_patterns))
+    def _fmt(intensity, n):
+        return f"{intensity * 100:.0f}% of speeches discussed this topic<br>Speeches: {n}"
 
-    # Monthly aggregation for all themes
-    theme_monthly = {theme: {} for theme in theme_patterns}
-    for month in months:
-        month_rows = df_w[df_w["month"] == month]
-        n = len(month_rows)
-        for theme in theme_patterns:
-            if n < 2:
-                theme_monthly[theme][month] = {"intensity": None, "n": n}
-            else:
-                vals = [row["_scores"][theme] for _, row in month_rows.iterrows()]
-                theme_monthly[theme][month] = {"intensity": sum(vals) / n, "n": n}
-
-    out = ""
-
-    # ── Chart 1: Macro Watchlist ──────────────────────────────────────────────
-    if watchlist:
-        watchlist_themes = [t for t in watchlist if t in theme_patterns]
-        if watchlist_themes:
-            fig = _build_heatmap(theme_monthly, watchlist_themes, months, month_labels)
-            chart_html = pio.to_html(fig, include_plotlyjs=False, full_html=False,
-                                     config={"displayModeBar": False, "responsive": True})
-            out += _section_html(
-                "Macro Watchlist &middot; Last 12 Months &middot; Relevant speeches only",
-                chart_html,
-            )
-
-    # ── Chart 2: Structural Themes (top 10 TF-IDF themes, excl. watchlist) ───
-    if bank_themes:
-        structural = [t for t in bank_themes if t in theme_patterns and t not in watchlist]
-        if structural:
-            fig2 = _build_heatmap(theme_monthly, structural, months, month_labels)
-            chart_html2 = pio.to_html(fig2, include_plotlyjs=False, full_html=False,
-                                      config={"displayModeBar": False, "responsive": True})
-            out += _section_html(
-                "Policy Themes &middot; Last 12 Months &middot; Relevant speeches only",
-                chart_html2,
-            )
-
-    return out
+    fig = _build_heatmap(
+        {t: theme_monthly[t] for t in active_topics},
+        active_topics, months, month_labels, fmt_intensity=_fmt,
+    )
+    chart_html = pio.to_html(fig, include_plotlyjs=False, full_html=False,
+                             config={"displayModeBar": False, "responsive": True})
+    return _section_html(
+        "Macro Watchlist &middot; Last 12 Months &middot; Share of relevant speeches",
+        chart_html,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -634,6 +655,11 @@ tr.expanded .td-body-section{{max-height:520px;opacity:1;margin-top:12px}}
 .sp-notice{{font-size:11px;color:#6B7280;background:#F9FAFB;border:1px solid #E4E8EF;border-radius:4px;padding:7px 10px;margin-bottom:12px;line-height:1.5}}
 .sp-notice a{{color:#2563EB;text-decoration:none}}.sp-notice a:hover{{text-decoration:underline}}
 .sp-list{{margin:0 0 0.85em;padding-left:1.4em;color:#374151}}.sp-list li{{margin-bottom:0.25em;font-size:12.5px;line-height:1.7}}
+
+.td-source-link{{max-height:0;overflow:hidden;opacity:0;transition:max-height .28s ease,opacity .22s ease,margin-top .2s ease;margin-top:0}}
+tr.expanded .td-source-link{{max-height:44px;opacity:1;margin-top:8px}}
+.source-btn{{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#4F46E5;border:1px solid #C7D2FE;background:#EEF2FF;border-radius:4px;padding:4px 10px;text-decoration:none;letter-spacing:.01em}}
+.source-btn:hover{{background:#E0E7FF;color:#3730A3}}
 
 .row-bar{{display:flex;align-items:center;gap:9px;white-space:nowrap;padding-top:1px}}
 .row-num{{font-family:Georgia,serif;font-size:15px;min-width:14px;text-align:right;font-variant-numeric:tabular-nums}}
@@ -820,6 +846,15 @@ if(nOff>0){{
   notice.style.display='none';
 }}
 
+function realUrl(u){{
+  if(!u)return '';
+  if(u.startsWith('bcb::')){{
+    const path=(u.split('::')[2]||'');
+    return path.startsWith('/')?'https://www.bcb.gov.br'+path:'https://www.bcb.gov.br/acessoinformacao/discursos';
+  }}
+  return u;
+}}
+
 function fmtBody(txt,url){{
   if(!txt||txt==='nan'||txt==='None') return '';
   function esc(s){{return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}}
@@ -871,14 +906,17 @@ document.getElementById('tbody').innerHTML=byDate.map((d,i)=>{{
   const reason=d.relevant_to_mp_reason?` — "${{d.relevant_to_mp_reason}}"`:'';
   const badge=isOff?`<span class="off-topic-badge ${{cls}}" title="Off-topic (${{src}}): ${{cat}}${{reason}}">${{cat}}</span>`:'';
   const rowCls=isOff?'off-topic hidden':'';
-  const hasBody=!!(d.body&&d.body!=='nan'&&d.body!=='None');
-  const bodySection=hasBody?'<div class="td-body-section"><span class="td-body-label">Full speech</span><div class="td-body"></div></div>':'';
+  const hasBody=!!(d.body&&d.body!=='nan'&&d.body!=='None')||(d.body_en&&d.body_en!=='nan'&&d.body_en!=='None');
+  const bodySection=hasBody?'<div class="td-body-section"><span class="td-body-label">Full speech text</span><div class="td-body"></div></div>':'';
+  const rUrl=realUrl(d.url);
+  const sourceBtn=rUrl?'<div class="td-source-link"><a class="source-btn" href="'+rUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">View original speech ↗</a></div>':'';
   return`<tr class="${{rowCls}}" data-idx="${{i}}">
     <td class="td-date">${{fmt(d.date)}}</td>
     <td class="td-speaker" title="${{d.speaker}}">${{d.speaker}}</td>
     <td>
-      <div class="title-text"><a href="${{d.url}}" target="_blank" onclick="event.stopPropagation()">${{d.title}}</a>${{badge}}</div>
+      <div class="title-text"><a href="${{rUrl}}" target="_blank" onclick="event.stopPropagation()">${{d.title}}</a>${{badge}}</div>
       <div class="td-justification">${{d.justification||''}}</div>
+      ${{sourceBtn}}
       ${{bodySection}}
     </td>
     <td>${{scoreCell}}</td>
@@ -895,7 +933,7 @@ document.getElementById('tbody').addEventListener('click',function(e){{
     const bodyDiv=r.querySelector('.td-body');
     if(bodyDiv&&!bodyDiv.dataset.loaded){{
       const di=byDate[parseInt(r.dataset.idx)];
-      bodyDiv.innerHTML=fmtBody(di.body||'',di.url||'');
+      bodyDiv.innerHTML=fmtBody(di.body_en||di.body||'',realUrl(di.url||''));
       bodyDiv.dataset.loaded='1';
     }}
   }}
@@ -1082,7 +1120,7 @@ def generate_filtered_report(
 
     timeline_html = make_timeline_with_ghosts(df_relevant, df_offtopic, meetings=meetings)
     trend_html = make_trend_chart(df_relevant)
-    theme_html = make_theme_chart(bank_db_name, df)
+    theme_html = make_watchlist_chart(df)
 
     active_members_json = json.dumps(sorted(active_members))
 
