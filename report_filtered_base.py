@@ -481,8 +481,8 @@ def make_watchlist_chart(df: pd.DataFrame) -> str:
             if n < 2:
                 theme_monthly[topic][month] = {"intensity": None, "n": n}
             else:
-                discussed = sum(1 for _, r in rows.iterrows() if r["_ts"].get(topic, 0) >= 1)
-                theme_monthly[topic][month] = {"intensity": discussed / n, "n": n}
+                avg = sum(r["_ts"].get(topic, 0) for _, r in rows.iterrows()) / n
+                theme_monthly[topic][month] = {"intensity": avg, "n": n}
 
     # Only show topics this bank actually discussed at least once
     active_topics = [
@@ -496,7 +496,7 @@ def make_watchlist_chart(df: pd.DataFrame) -> str:
         return ""
 
     def _fmt(intensity, n):
-        return f"{intensity * 100:.0f}% of speeches discussed this topic<br>Speeches: {n}"
+        return f"Avg prominence: {intensity:.2f} / 3<br>Speeches: {n}"
 
     fig = _build_heatmap(
         {t: theme_monthly[t] for t in active_topics},

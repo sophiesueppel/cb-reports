@@ -46,6 +46,10 @@ TOOLS = [
                         "type": "string",
                         "description": "1-2 sentences citing specific language or themes that drove the rating. ALWAYS write in English, even if the speech was in another language.",
                     },
+                    "translation": {
+                        "type": "string",
+                        "description": "Full English translation of the speech. Required ONLY when the speech is not in English — omit this field entirely for English speeches.",
+                    },
                 },
                 "required": ["score", "justification"],
                 "additionalProperties": False,
@@ -53,6 +57,83 @@ TOOLS = [
         },
     }
 ]
+
+
+# ---------------------------------------------------------------------------
+# Topic scoring
+# ---------------------------------------------------------------------------
+
+def score_topics(text: str, title: str = "", bank: str = "") -> dict:
+    """Score a speech against the 15 watchlist topics using gpt-4.1-mini.
+
+    Returns {topic_name: 0-3} for each topic.
+    0 = not mentioned
+    1 = passing mention (brief reference, single sentence)
+    2 = substantive discussion (a paragraph or meaningful coverage)
+    3 = central/major theme (significant portion of the speech devoted to it)
+    Text is truncated to 8,000 chars — sufficient for topic detection.
+    """
+    from topics import WATCHLIST_TOPICS, WATCHLIST_NAMES
+
+    properties = {
+        name: {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": (
+                f"Prominence of this topic in the speech: {desc}. "
+                "0 = not mentioned. "
+                "1 = passing mention (brief reference, single sentence). "
+                "2 = substantive discussion (a paragraph or meaningful coverage). "
+                "3 = central/major theme (significant portion of the speech devoted to it)."
+            ),
+        }
+        for name, desc in WATCHLIST_TOPICS
+    }
+
+    tool = [{
+        "type": "function",
+        "function": {
+            "name": "submit_topic_scores",
+            "description": "Submit prominence scores for macro/geopolitical topics in this central bank speech",
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": WATCHLIST_NAMES,
+                "additionalProperties": False,
+            },
+        },
+    }]
+
+    system_msg = (
+        "You are analysing a central bank speech to score how prominently it covers each macro/geopolitical topic.\n\n"
+        "Use this scale:\n"
+        "  0 = not mentioned at all\n"
+        "  1 = passing mention — a brief reference, a single sentence, or an item in a list\n"
+        "  2 = substantive discussion — a paragraph or more of meaningful coverage\n"
+        "  3 = central/major theme — a significant portion of the speech is devoted to this topic\n\n"
+        "Most topics will score 0. A typical speech has 1–3 topics scoring 2 or higher."
+    )
+
+    user_msg = (
+        f'Title: "{title}"\n'
+        f"Bank: {bank or 'Unknown'}\n\n"
+        f"---\n\n{text[:8000]}"
+    )
+
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        temperature=0,
+        tools=tool,
+        tool_choice={"type": "function", "function": {"name": "submit_topic_scores"}},
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+    )
+    tool_call = response.choices[0].message.tool_calls[0]
+    return json.loads(tool_call.function.arguments)
 
 
 # ---------------------------------------------------------------------------
@@ -114,12 +195,26 @@ def rate_speech(
     text: str,
     bank: str | None = None,
     db_path: str | None = None,
+    language: str = "en",
+    body_en: str | None = None,
 ) -> dict:
     """Rate a central bank speech on the 1–10 hawkish/dovish scale.
 
     bank and db_path are optional but improve accuracy by providing rate
     environment context and speaker baseline.
+    language: ISO 639-1 code of the speech text ('en', 'cs', 'sv', etc.).
+    body_en: pre-translated English version. When provided for a non-English
+             speech, the rater scores this English text directly (no in-call
+             translation) so the calibrated English signal words apply exactly.
+             When absent for non-English speeches the rater translates inline
+             as before (legacy path).
     """
+    # If a pre-translated English version exists, rate that — it's higher quality
+    # because the rater's signal word list is calibrated for English phrasing.
+    if body_en and body_en.strip() and language != "en":
+        text = body_en
+        language = "en"
+
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     # Build context block
@@ -137,11 +232,20 @@ def rate_speech(
     if context_lines:
         context_block = "\nCONTEXT:\n" + "\n".join(f"- {l}" for l in context_lines) + "\n"
 
+    lang_note = ""
+    if language != "en":
+        lang_note = (
+            f"\nNOTE: This speech is in {language.upper()}. "
+            "Rate it based on its monetary policy content. "
+            "You MUST provide a full English translation in the 'translation' field.\n"
+        )
+
     user_msg = (
         f'Speech: "{title}"\n'
         f"Speaker: {speaker}\n"
         f"Date: {date}\n"
         f"{context_block}"
+        f"{lang_note}"
         f"\n---\n\n"
         f"{text}"  # full text, no truncation
     )
@@ -157,4 +261,15 @@ def rate_speech(
     )
 
     tool_call = response.choices[0].message.tool_calls[0]
-    return json.loads(tool_call.function.arguments)
+    result = json.loads(tool_call.function.arguments)
+    # Rename 'translation' → 'body_en' for consistency with DB column
+    if "translation" in result:
+        result["body_en"] = result.pop("translation")
+
+    # Score watchlist topics (separate cheap call — failure doesn't affect rating)
+    try:
+        result["topic_scores"] = score_topics(text, title=title, bank=bank or "")
+    except Exception:
+        result["topic_scores"] = None
+
+    return result
