@@ -8,10 +8,12 @@ CBRT communicates almost entirely through the Governor; Deputy Governors have
 no dedicated speech archive on the TCMB website.
 """
 
+import html as html_module
 import io
 import re
 import sqlite3
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -91,12 +93,29 @@ _MONTHS = {m: f"{i:02d}" for i, m in enumerate(
 )}
 
 
+# Turkish letters that NFKD/ASCII-fold alone does not map correctly (notably the
+# dotless 'ı', which ascii-ignore would drop entirely). Map them first.
+_TR_FOLD = str.maketrans({
+    "ı": "i", "İ": "I", "ğ": "g", "Ğ": "G", "ş": "s", "Ş": "S",
+    "ç": "c", "Ç": "C", "ö": "o", "Ö": "O", "ü": "u", "Ü": "U",
+})
+
+
+def _ascii_fold(s: str) -> str:
+    """Decode HTML entities and strip diacritics to ASCII, handling Turkish letters
+    (e.g. 'Şahap Kavcıoğlu' -> 'Sahap Kavcioglu') that NFKD alone would mangle."""
+    decoded = html_module.unescape(s).translate(_TR_FOLD)
+    return unicodedata.normalize("NFKD", decoded).encode("ascii", "ignore").decode("ascii")
+
+
 def _normalize_speaker(raw: str) -> str:
     name = _TITLE_PREFIX_RE.sub("", raw).strip()
     if name in ALL_CBRT:
         return name
     last = name.split()[-1] if name else ""
-    return _ALIASES.get(last, name)
+    if last in _ALIASES:
+        return _ALIASES[last]
+    return _ALIASES.get(_ascii_fold(last), name)
 
 
 def _parse_date(text: str) -> str:
@@ -108,7 +127,8 @@ def _parse_date(text: str) -> str:
 
 
 def _matches_cbrt(title_raw: str) -> bool:
-    return any(s in title_raw for s in _CBRT_SURNAMES)
+    folded = _ascii_fold(title_raw)
+    return any(s in folded for s in _CBRT_SURNAMES)
 
 
 # ── DB helpers ───────────────────────────────────────────────────────────────
