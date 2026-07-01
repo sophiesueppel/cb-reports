@@ -720,6 +720,20 @@ def refresh_meetings() -> None:
             print(f"  {bank}: +{added} new decision(s)")
 
 
+def _run_bank(label: str, fn):
+    """Run one bank's daily scrape/rate/report step, isolating failures.
+
+    A crash in one bank (broken scraper, missing browser, site down) must not abort
+    the whole run and block the other banks or the final push. Logs and continues."""
+    try:
+        return fn() or []
+    except Exception as e:
+        import traceback
+        print(f"  !! {label} step FAILED: {e}")
+        traceback.print_exc()
+        return []
+
+
 def main() -> None:
     if not os.environ.get("OPENAI_API_KEY"):
         sys.exit("Error: OPENAI_API_KEY not set. Copy .env.example to .env and fill in your key.")
@@ -738,98 +752,91 @@ def main() -> None:
         print(f"  Rate-decision refresh skipped: {e}")
 
     # --- Federal Reserve ---
-    print("Fetching latest speech from federalreserve.gov ...")
-    url = get_latest_speech_url()
-    print(f"  {url}")
-
     fed_new = []
-    rated = already_rated_urls()
-    if url in rated:
-        df = load_data()
-        row = df[df["url"] == url].iloc[0]
-        print(f"Already rated on {row['rated_at'][:10]}:")
-        print(f"  {row['date']} | {row['speaker']}")
-        print(f"  Score: {row['score']}/10 — {row['justification']}")
-        generate_fed_filtered_report()
-    else:
-        print("Fetching speech text ...")
-        speech = get_speech(url)
-        print(f"  Title:   {speech.title}")
-        print(f"  Speaker: {speech.speaker}")
-        print(f"  Date:    {speech.date}")
-        print(f"  Length:  {len(speech.text):,} chars")
+    try:
+        print("Fetching latest speech from federalreserve.gov ...")
+        url = get_latest_speech_url()
+        print(f"  {url}")
 
-        if not speech.text:
-            sys.exit("Error: speech text is empty — the page structure may have changed.")
+        rated = already_rated_urls()
+        if url in rated:
+            df = load_data()
+            row = df[df["url"] == url].iloc[0]
+            print(f"Already rated on {row['rated_at'][:10]}:")
+            print(f"  {row['date']} | {row['speaker']}")
+            print(f"  Score: {row['score']}/10 — {row['justification']}")
+            generate_fed_filtered_report()
+        else:
+            print("Fetching speech text ...")
+            speech = get_speech(url)
+            print(f"  Title:   {speech.title}")
+            print(f"  Speaker: {speech.speaker}")
+            print(f"  Date:    {speech.date}")
+            print(f"  Length:  {len(speech.text):,} chars")
 
-        print("Rating speech ...")
-        rating = rate_speech(speech.title, speech.speaker, speech.date, speech.text,
-                             bank="Federal Reserve", db_path=str(DB_PATH))
+            if not speech.text:
+                raise RuntimeError("speech text is empty — the page structure may have changed.")
 
-        row = {
-            "url":           speech.url,
-            "date":          speech.date,
-            "speaker":       speech.speaker,
-            "title":         speech.title,
-            "score":         rating["score"],
-            "justification": rating["justification"],
-            "rated_at":      datetime.now(timezone.utc).isoformat(),
-            "body":          speech.text,
-            "central_bank":  "Federal Reserve",
-            "country":       "USA",
-        }
-        save_row(row)
-        save_topic_scores(speech.url, rating.get("topic_scores"))
-        fed_new = [row]
+            print("Rating speech ...")
+            rating = rate_speech(speech.title, speech.speaker, speech.date, speech.text,
+                                 bank="Federal Reserve", db_path=str(DB_PATH))
 
-        print(f"\nResult:")
-        print(f"  Score:         {rating['score']}/10")
-        print(f"  Justification: {rating['justification']}")
-        print(f"\nSaved to {DB_PATH}")
-        run_classification(bank="Federal Reserve")
-        generate_fed_filtered_report()
+            row = {
+                "url":           speech.url,
+                "date":          speech.date,
+                "speaker":       speech.speaker,
+                "title":         speech.title,
+                "score":         rating["score"],
+                "justification": rating["justification"],
+                "rated_at":      datetime.now(timezone.utc).isoformat(),
+                "body":          speech.text,
+                "central_bank":  "Federal Reserve",
+                "country":       "USA",
+            }
+            save_row(row)
+            save_topic_scores(speech.url, rating.get("topic_scores"))
+            fed_new = [row]
 
-    # --- ECB ---
-    ecb_new = run_ecb_daily()
+            print(f"\nResult:")
+            print(f"  Score:         {rating['score']}/10")
+            print(f"  Justification: {rating['justification']}")
+            print(f"\nSaved to {DB_PATH}")
+            run_classification(bank="Federal Reserve")
+            generate_fed_filtered_report()
+    except Exception as e:
+        import traceback
+        print(f"  !! Federal Reserve step FAILED: {e}")
+        traceback.print_exc()
 
-    # --- Bank of England ---
-    boe_new = run_boe_daily()
-
-    # --- Bank of Japan ---
-    boj_new = run_boj_daily()
-
-    # --- BCB ---
-    bcb_new = run_bcb_daily()
-
-    # --- Riksbank ---
-    riksbank_new = run_riksbank_daily()
-
-    # --- SARB ---
-    sarb_new = run_sarb_daily()
-
-    # --- CNB ---
-    cnb_new = run_cnb_daily()
-
-    # --- NBP ---
-    nbp_new = run_nbp_daily()
-
-    # --- BNR ---
-    bnr_new = run_bnr_daily()
-
-    # --- CBRT ---
-    cbrt_new = run_cbrt_daily()
+    # Each bank is isolated: a failure logs and continues so the rest still run.
+    ecb_new      = _run_bank("ECB", run_ecb_daily)
+    boe_new      = _run_bank("Bank of England", run_boe_daily)
+    boj_new      = _run_bank("Bank of Japan", run_boj_daily)
+    bcb_new      = _run_bank("BCB", run_bcb_daily)
+    riksbank_new = _run_bank("Riksbank", run_riksbank_daily)
+    sarb_new     = _run_bank("SARB", run_sarb_daily)
+    cnb_new      = _run_bank("CNB", run_cnb_daily)
+    nbp_new      = _run_bank("NBP", run_nbp_daily)
+    bnr_new      = _run_bank("BNR", run_bnr_daily)
+    cbrt_new     = _run_bank("CBRT", run_cbrt_daily)
 
     # --- Global overview ---
-    print("\nRegenerating global themes overview ...")
-    from report_global_themes import generate_global_themes_report
-    generate_global_themes_report()
+    try:
+        print("\nRegenerating global themes overview ...")
+        from report_global_themes import generate_global_themes_report
+        generate_global_themes_report()
+    except Exception as e:
+        print(f"  !! Global themes overview FAILED: {e}")
 
     # --- Emerging topics scan ---
     all_new = (fed_new + ecb_new + boe_new + boj_new + bcb_new +
                riksbank_new + sarb_new + cnb_new + nbp_new + bnr_new + cbrt_new)
     if all_new:
-        from detect_emerging_topics import run_emerging_scan
-        run_emerging_scan(all_new)
+        try:
+            from detect_emerging_topics import run_emerging_scan
+            run_emerging_scan(all_new)
+        except Exception as e:
+            print(f"  !! Emerging topics scan FAILED: {e}")
 
     # --- Back up the database off-machine (OneDrive) ---
     print("\nBacking up database ...")
