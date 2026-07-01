@@ -472,21 +472,32 @@ def make_watchlist_chart(df: pd.DataFrame) -> str:
         lambda s: json.loads(s) if isinstance(s, str) else {}
     )
 
-    theme_monthly = {}
-    for topic in WATCHLIST_NAMES:
-        theme_monthly[topic] = {}
-        for month in months:
-            rows = df_w[df_w["month"] == month]
-            n = len(rows)
-            if n < 2:
-                theme_monthly[topic][month] = {"intensity": None, "n": n}
-            else:
-                avg = sum(r["_ts"].get(topic, 0) for _, r in rows.iterrows()) / n
-                theme_monthly[topic][month] = {"intensity": avg, "n": n}
+    def _build_theme_monthly(min_n: int) -> dict:
+        """A month counts only if it has >= min_n speeches (sparser months → None)."""
+        tm = {}
+        for topic in WATCHLIST_NAMES:
+            tm[topic] = {}
+            for month in months:
+                rows = df_w[df_w["month"] == month]
+                n = len(rows)
+                if n < min_n:
+                    tm[topic][month] = {"intensity": None, "n": n}
+                else:
+                    avg = sum(r["_ts"].get(topic, 0) for _, r in rows.iterrows()) / n
+                    tm[topic][month] = {"intensity": avg, "n": n}
+        return tm
 
     def _topic_avg(data: dict) -> float:
         vals = [v["intensity"] for v in data.values() if v["intensity"] is not None]
         return sum(vals) / len(vals) if vals else 0.0
+
+    # Standard rule: a month needs >=2 speeches to average. For very sparse banks
+    # (e.g. CBRT, BNR) no month clears that bar, which would drop the whole chart.
+    # Adaptive fallback: if >=2/month yields no topics, retry at >=1/month so those
+    # banks still get a (sparser) heatmap. High-volume banks are unaffected.
+    theme_monthly = _build_theme_monthly(min_n=2)
+    if not any(_topic_avg(theme_monthly[t]) >= 0.15 for t in WATCHLIST_NAMES):
+        theme_monthly = _build_theme_monthly(min_n=1)
 
     def _trend_arrow(data: dict) -> str:
         recent = [data[m]["intensity"] for m in months[-3:] if data[m]["intensity"] is not None]
