@@ -25,9 +25,13 @@ DB_PATH = Path("data/speeches.db")
 BIS_BASE = "https://www.bis.org"
 BIS_DOC_LIST_URL = f"{BIS_BASE}/api/document_lists/cbspeeches.json"
 TCMB_BASE = "https://www.tcmb.gov.tr"
+# Turkish "Başkanın Konuşmaları" archive — far richer than the English "Remarks by
+# Governor" mirror (includes interviews/röportaj and the full Kavcıoğlu 2021–23 era).
+# Renders as static HTML with the same block-collection-box structure. Turkish bodies
+# are translated to English downstream via translator.translate_speech.
 TCMB_YEAR_URL = (
-    f"{TCMB_BASE}/wps/wcm/connect/EN/TCMB+EN/Main+Menu/Announcements/"
-    "Remarks+by+Governor/{year}/"
+    f"{TCMB_BASE}/wps/wcm/connect/tr/tcmb+tr/main+menu/duyurular/"
+    "baskanin+konusmalari/{year}"
 )
 
 _UA = (
@@ -288,7 +292,8 @@ def _scrape_tcmb_year(year: int) -> list[dict]:
                 if pdf_link is None:
                     pdf_link = TCMB_BASE + href if href.startswith("/") else href
             else:
-                if html_link is None and "/Main+Menu/" in href:
+                # Speech/interview HTML page (EN "Main+Menu", TR "main+menu")
+                if html_link is None and "main+menu" in href.lower():
                     html_link = TCMB_BASE + href if href.startswith("/") else href
 
         title = ""
@@ -300,16 +305,19 @@ def _scrape_tcmb_year(year: int) -> list[dict]:
         if not title:
             continue
 
-        # Skip slides/presentations — they're supporting material, not speech text
-        lower = title.lower()
-        if "presentation" in lower or "remarks" in lower.replace("remarks by governor", ""):
-            pass  # include remarks, skip presentations
-        if "presentation" in lower and "speech" not in lower:
-            continue
-
         url = html_link or pdf_link
         if not url or url in seen_urls:
             continue
+
+        # Skip standalone slide decks (Turkish "Sunum..." / English "presentation"):
+        # bullet-point slides with little rateable text and no speech page. Speeches
+        # (Konuşma) and interviews (Röportaj) are kept.
+        low = title.lower()
+        if not html_link and pdf_link and "sunum" in pdf_link.lower():
+            continue
+        if "presentation" in low and "speech" not in low:
+            continue
+
         seen_urls.add(url)
 
         if not date_iso:
