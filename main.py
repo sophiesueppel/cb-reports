@@ -273,10 +273,18 @@ def save_row(row: dict) -> None:
     if "body" not in cols:
         conn.execute("ALTER TABLE speeches ADD COLUMN body TEXT")
         conn.commit()
+    # UPSERT on url (PRIMARY KEY). INSERT OR REPLACE would delete the existing
+    # row and re-insert only these 10 columns, wiping enriched columns like
+    # topic_scores, body_en, title_en and relevant_to_mp. ON CONFLICT DO UPDATE
+    # touches only the base columns and preserves everything else.
     conn.execute(
-        "INSERT OR REPLACE INTO speeches "
+        "INSERT INTO speeches "
         "(url, date, speaker, title, score, justification, rated_at, body, central_bank, country) "
-        "VALUES (:url, :date, :speaker, :title, :score, :justification, :rated_at, :body, :central_bank, :country)",
+        "VALUES (:url, :date, :speaker, :title, :score, :justification, :rated_at, :body, :central_bank, :country) "
+        "ON CONFLICT(url) DO UPDATE SET "
+        "date=excluded.date, speaker=excluded.speaker, title=excluded.title, "
+        "score=excluded.score, justification=excluded.justification, rated_at=excluded.rated_at, "
+        "body=excluded.body, central_bank=excluded.central_bank, country=excluded.country",
         row,
     )
     conn.commit()
