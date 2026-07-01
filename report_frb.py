@@ -135,8 +135,14 @@ def _add_meeting_vlines(fig, meetings):
         label = m.get("label", "").replace("\n", " ")
         rate = m.get("rate", "")
         note = m.get("note", "")
+        try:
+            d = date.fromisoformat(m["date"])
+            date_str = f"{d.day} {d.strftime('%b %Y')}"
+        except (ValueError, KeyError):
+            date_str = m.get("date", "")
         hover_text = (
             f"<span style='font-weight:600'>{label}</span>"
+            + (f"<br><span style='color:#6B7280'>{date_str}</span>" if date_str else "")
             + (f"<br>Rate: {rate}" if rate else "")
             + (f"<br>{note}" if note else "")
         )
