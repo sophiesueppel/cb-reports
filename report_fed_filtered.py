@@ -812,7 +812,8 @@ def generate_fed_filtered_report() -> None:
         print("No database found.")
         return
 
-    from meetings import FED_MEETINGS
+    from meetings import get_meetings
+    FED_MEETINGS = get_meetings("Federal Reserve")
     today = date.today()
     cutoff = date(today.year - 5, today.month, today.day).isoformat()
 

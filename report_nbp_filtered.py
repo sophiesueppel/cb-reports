@@ -5,7 +5,7 @@ from report_filtered_base import generate_filtered_report
 
 
 def generate_nbp_filtered_report() -> None:
-    from meetings import NBP_MEETINGS
+    from meetings import get_meetings
     from scraper_nbp import ALL_NBP
 
     generate_filtered_report(
@@ -13,7 +13,7 @@ def generate_nbp_filtered_report() -> None:
         bank_label="Narodowy Bank Polski",
         accent_color="#DC143C",  # Polish flag red
         output_path=Path("report_nbp_filtered.html"),
-        meetings=NBP_MEETINGS,
+        meetings=get_meetings("NBP"),
         member_filter=lambda speaker, date: speaker in ALL_NBP,
         active_members=list(ALL_NBP),
     )

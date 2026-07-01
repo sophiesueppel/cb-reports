@@ -142,17 +142,8 @@ def score_topics(text: str, title: str = "", bank: str = "") -> dict:
 
 def _rate_at_date(bank: str, speech_date: str) -> str | None:
     """Return the policy rate in effect on speech_date for the given bank."""
-    from meetings import FED_MEETINGS, BOE_MEETINGS, ECB_MEETINGS, BOJ_MEETINGS, COPOM_MEETINGS, RIKSBANK_MEETINGS, SARB_MEETINGS
-    bank_map = {
-        "Federal Reserve": FED_MEETINGS,
-        "Bank of England": BOE_MEETINGS,
-        "ECB": ECB_MEETINGS,
-        "Bank of Japan": BOJ_MEETINGS,
-        "BCB": COPOM_MEETINGS,
-        "Riksbank": RIKSBANK_MEETINGS,
-        "SARB": SARB_MEETINGS,
-    }
-    meetings = bank_map.get(bank, [])
+    from meetings import get_meetings
+    meetings = get_meetings(bank)
     # Find the most recent meeting on or before the speech date
     past = [m for m in meetings if m.get("rate") and m["date"] <= speech_date]
     if not past:

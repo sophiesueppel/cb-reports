@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -654,6 +655,71 @@ def push_reports_to_github() -> None:
         print(f"  GitHub Pages push failed: {e}")
 
 
+def backup_db(keep: int = 7) -> None:
+    """Copy speeches.db to OneDrive, keeping the last `keep` dated copies.
+
+    The DB is gitignored (too large for GitHub) and lives only on this machine,
+    so this is its off-machine safety net. Rotating dated copies mean a corrupted
+    run can't wipe older good backups. No-ops cleanly if OneDrive isn't present."""
+    onedrive = os.environ.get("OneDriveCommercial") or os.environ.get("OneDrive")
+    if not onedrive or not DB_PATH.exists():
+        print("  DB backup skipped (no OneDrive folder or DB missing).")
+        return
+    bkdir = Path(onedrive) / "cb-reports-backups"
+    bkdir.mkdir(parents=True, exist_ok=True)
+    dst = bkdir / f"speeches-{datetime.now().strftime('%Y-%m-%d')}.db"
+    try:
+        shutil.copy2(DB_PATH, dst)
+        backups = sorted(bkdir.glob("speeches-*.db"))
+        for old in backups[:-keep]:
+            old.unlink()
+        print(f"  DB backed up to {dst} ({dst.stat().st_size/1024/1024:.0f} MB).")
+    except Exception as e:
+        print(f"  DB backup failed: {e}")
+
+
+def refresh_meetings() -> None:
+    """Refresh rate-decision data from each bank's official site into the DB.
+
+    Extracts decisions via LLM (meetings_extractor) and appends only meetings newer
+    than the latest decided one already stored for that bank — so historical and
+    manually-locked rows are never disturbed, and official 'effective date' vs
+    'decision day' offsets can't create duplicate chart lines. Non-fatal per bank.
+    Consumers read the fresh data at report-generation time via meetings.get_meetings.
+    """
+    from datetime import date
+    from meetings_extractor import SOURCES, fetch_and_extract, normalize_rate, build_label
+    from meetings_store import upsert_meeting, latest_decided_date
+
+    today = date.today().isoformat()
+    print("\nRefreshing rate decisions from official sites ...")
+    for bank in SOURCES:
+        try:
+            rows = fetch_and_extract(bank, today)
+        except Exception as e:
+            print(f"  {bank}: fetch/extract failed ({e})")
+            continue
+        last = latest_decided_date(bank) or ""
+        src = SOURCES[bank]
+        added = 0
+        for r in rows:
+            d = r.get("date", "")
+            if not d or d <= last or d > today:
+                continue  # only genuinely new decisions that have already happened
+            upsert_meeting(
+                bank, d, r["decision"],
+                rate=normalize_rate(r.get("rate"), src.rate_kind),
+                bp_change=r.get("bp_change"),
+                vote=(r.get("vote") or None),
+                label=build_label(r["decision"], r.get("bp_change"), r.get("vote")),
+                note=(r.get("note") or None),
+                source="llm", source_url=src.urls[0], raw_extract=r,
+            )
+            added += 1
+        if added:
+            print(f"  {bank}: +{added} new decision(s)")
+
+
 def main() -> None:
     if not os.environ.get("OPENAI_API_KEY"):
         sys.exit("Error: OPENAI_API_KEY not set. Copy .env.example to .env and fill in your key.")
@@ -663,6 +729,13 @@ def main() -> None:
     member_changes = check_members()
     if member_changes:
         slack_notify_member_changes(member_changes)
+
+    # --- Rate-decision refresh (all banks) — before reports/rating so both read
+    #     the latest decisions via meetings.get_meetings() ---
+    try:
+        refresh_meetings()
+    except Exception as e:
+        print(f"  Rate-decision refresh skipped: {e}")
 
     # --- Federal Reserve ---
     print("Fetching latest speech from federalreserve.gov ...")
@@ -757,6 +830,10 @@ def main() -> None:
     if all_new:
         from detect_emerging_topics import run_emerging_scan
         run_emerging_scan(all_new)
+
+    # --- Back up the database off-machine (OneDrive) ---
+    print("\nBacking up database ...")
+    backup_db()
 
     # --- Push updated reports to GitHub Pages ---
     print("\nPushing reports to GitHub Pages ...")

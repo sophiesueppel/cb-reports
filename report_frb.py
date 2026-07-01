@@ -776,7 +776,8 @@ document.getElementById('tbody').addEventListener('click',function(e){{
 def generate_report() -> None:
     if not DB_PATH.exists():
         return
-    from meetings import FED_MEETINGS
+    from meetings import get_meetings
+    FED_MEETINGS = get_meetings("Federal Reserve")
     today = date.today()
     cutoff = date(today.year - 5, today.month, today.day).isoformat()
     conn = sqlite3.connect(str(DB_PATH))

@@ -5,7 +5,7 @@ from report_filtered_base import generate_filtered_report
 
 
 def generate_boe_filtered_report() -> None:
-    from meetings import BOE_MEETINGS
+    from meetings import get_meetings
     from scraper_boe import was_mpc_member, MPC_MEMBERS
 
     generate_filtered_report(
@@ -13,7 +13,7 @@ def generate_boe_filtered_report() -> None:
         bank_label="Bank of England",
         accent_color="#C8102E",
         output_path=Path("report_boe_filtered.html"),
-        meetings=BOE_MEETINGS,
+        meetings=get_meetings("Bank of England"),
         member_filter=lambda speaker, date: was_mpc_member(speaker, date),
         active_members=list(MPC_MEMBERS),
     )

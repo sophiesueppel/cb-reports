@@ -412,8 +412,8 @@ def generate_boj_report() -> None:
     from speaker_norm import normalize_speaker
     df["speaker"] = df.apply(lambda r: normalize_speaker(r["speaker"], r["central_bank"]), axis=1)
 
-    from meetings import BOJ_MEETINGS
-    timeline_html = make_timeline(df, meetings=BOJ_MEETINGS)
+    from meetings import get_meetings
+    timeline_html = make_timeline(df, meetings=get_meetings("Bank of Japan"))
     trend_html = make_trend_chart(df)
 
     from scraper_boj import BOJ_POLICY_BOARD

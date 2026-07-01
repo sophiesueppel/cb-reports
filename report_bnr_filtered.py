@@ -5,7 +5,7 @@ from report_filtered_base import generate_filtered_report
 
 
 def generate_bnr_filtered_report() -> None:
-    from meetings import BNR_MEETINGS
+    from meetings import get_meetings
     from scraper_bnr import ALL_BNR
 
     generate_filtered_report(
@@ -13,7 +13,7 @@ def generate_bnr_filtered_report() -> None:
         bank_label="Banca Națională a României",
         accent_color="#002B7F",  # Romanian flag blue
         output_path=Path("report_bnr_filtered.html"),
-        meetings=BNR_MEETINGS,
+        meetings=get_meetings("BNR"),
         member_filter=lambda speaker, date: speaker in ALL_BNR,
         active_members=list(ALL_BNR),
     )

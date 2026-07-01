@@ -5,7 +5,7 @@ from report_filtered_base import generate_filtered_report
 
 
 def generate_cbrt_filtered_report() -> None:
-    from meetings import CBRT_MEETINGS
+    from meetings import get_meetings
     from scraper_cbrt import ALL_CBRT
 
     generate_filtered_report(
@@ -13,7 +13,7 @@ def generate_cbrt_filtered_report() -> None:
         bank_label="Central Bank of Turkey",
         accent_color="#E30A17",  # Turkish flag red
         output_path=Path("report_cbrt_filtered.html"),
-        meetings=CBRT_MEETINGS,
+        meetings=get_meetings("CBRT"),
         member_filter=lambda speaker, date: speaker in ALL_CBRT,
         active_members=list(ALL_CBRT),
     )

@@ -3,6 +3,13 @@
 # Fed/BoE vote format: majority–minority. Arrow: ▼ cut, ▲ hike.
 # ECB does not publish individual Governing Council votes.
 # Note: 2025 H2 Fed/BoE/ECB decisions inferred from known 2026 starting rates.
+#
+# The lists below are the SEED / offline fallback. At runtime the live data lives
+# in the SQLite `meetings` table (seeded from here, then refreshed from official
+# sites — see meetings_store.py and meetings_extractor.py). Consumers should call
+# get_meetings(bank) rather than reading a *_MEETINGS list directly.
+
+import os
 
 # ---------------------------------------------------------------------------
 # FEDERAL RESERVE
@@ -461,15 +468,23 @@ BOJ_MEETINGS_2025 = [
     {"date": "2025-06-17", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
     {"date": "2025-07-31", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
     {"date": "2025-09-19", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
-    {"date": "2025-10-29", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
-    {"date": "2025-12-19", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
+    {"date": "2025-10-29", "decision": "hold", "rate": "0.50%",
+     "note": "Held; two board members dissented, preferring a hike.",
+     "label": "Rates held"},
+    {"date": "2025-12-19", "decision": "hike", "rate": "0.75%",
+     "note": "Unanimous +25bp. Highest since 1995.",
+     "label": "+25bp hike"},
 ]
 
 BOJ_MEETINGS_2026 = [
-    {"date": "2026-01-24", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
-    {"date": "2026-03-19", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
-    {"date": "2026-04-30", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
-    {"date": "2026-06-17", "decision": "hold", "rate": "0.50%", "label": "Rates held"},
+    {"date": "2026-01-23", "decision": "hold", "rate": "0.75%",
+     "note": "Takata dissented, proposed a +25bp hike to 1.00%.",
+     "label": "Rates held"},
+    {"date": "2026-03-19", "decision": "hold", "rate": "0.75%", "label": "Rates held"},
+    {"date": "2026-04-28", "decision": "hold", "rate": "0.75%", "label": "Rates held"},
+    {"date": "2026-06-16", "decision": "hike", "rate": "1.00%",
+     "note": "7–1; Asada dissented (preferred hold). Highest since Sept 1995.",
+     "label": "+25bp hike · 7–1"},
     {"date": "2026-07-31", "decision": "upcoming", "label": "Jul 31"},
     {"date": "2026-09-19", "decision": "upcoming", "label": "Sep 19"},
     {"date": "2026-10-29", "decision": "upcoming", "label": "Oct 29"},
@@ -1027,3 +1042,41 @@ CBRT_MEETINGS = (
     CBRT_MEETINGS_2021 + CBRT_MEETINGS_2022 + CBRT_MEETINGS_2023 +
     CBRT_MEETINGS_2024 + CBRT_MEETINGS_2025 + CBRT_MEETINGS_2026
 )
+
+# ---------------------------------------------------------------------------
+# Accessor — prefer the DB, fall back to the seed lists above
+# ---------------------------------------------------------------------------
+
+# Canonical bank name -> the seed list defined above.
+_SEED_MEETINGS = {
+    "Federal Reserve": FED_MEETINGS,
+    "ECB":             ECB_MEETINGS,
+    "Bank of England": BOE_MEETINGS,
+    "Bank of Japan":   BOJ_MEETINGS,
+    "BCB":             COPOM_MEETINGS,
+    "Riksbank":        RIKSBANK_MEETINGS,
+    "SARB":            SARB_MEETINGS,
+    "CNB":             CNB_MEETINGS,
+    "NBP":             NBP_MEETINGS,
+    "BNR":             BNR_MEETINGS,
+    "CBRT":            CBRT_MEETINGS,
+}
+
+
+def get_meetings(bank: str) -> list[dict]:
+    """Return the meeting list for a bank, preferring the SQLite `meetings` table.
+
+    Falls back to the hardcoded seed list when the DB has no rows for the bank
+    (e.g. fresh checkout, un-seeded DB) or when reading the DB fails. Set
+    CB_MEETINGS_NO_DB=1 to force the seed lists (used by the seeding script).
+    """
+    seed = _SEED_MEETINGS.get(bank, [])
+    if os.environ.get("CB_MEETINGS_NO_DB"):
+        return seed
+    try:
+        from meetings_store import load_bank_meetings
+        rows = load_bank_meetings(bank)
+        return rows if rows else seed
+    except Exception:
+        return seed
+

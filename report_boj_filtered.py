@@ -5,7 +5,7 @@ from report_filtered_base import generate_filtered_report
 
 
 def generate_boj_filtered_report() -> None:
-    from meetings import BOJ_MEETINGS
+    from meetings import get_meetings
     from scraper_boj import BOJ_POLICY_BOARD
 
     generate_filtered_report(
@@ -13,7 +13,7 @@ def generate_boj_filtered_report() -> None:
         bank_label="Bank of Japan",
         accent_color="#BC002D",
         output_path=Path("report_boj_filtered.html"),
-        meetings=BOJ_MEETINGS,
+        meetings=get_meetings("Bank of Japan"),
         member_filter=None,
         active_members=list(BOJ_POLICY_BOARD),
     )

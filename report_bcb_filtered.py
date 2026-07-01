@@ -5,7 +5,7 @@ from report_filtered_base import generate_filtered_report
 
 
 def generate_bcb_filtered_report() -> None:
-    from meetings import COPOM_MEETINGS
+    from meetings import get_meetings
     from scraper_bcb import ALL_COPOM
 
     generate_filtered_report(
@@ -13,7 +13,7 @@ def generate_bcb_filtered_report() -> None:
         bank_label="Banco Central do Brasil (BCB)",
         accent_color="#009B3A",  # Brazilian green
         output_path=Path("report_bcb_filtered.html"),
-        meetings=COPOM_MEETINGS,
+        meetings=get_meetings("BCB"),
         member_filter=lambda speaker, date: speaker in ALL_COPOM,
         active_members=list(ALL_COPOM),
     )

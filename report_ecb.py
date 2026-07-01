@@ -417,8 +417,8 @@ def generate_ecb_report() -> None:
     from speaker_norm import normalize_speaker
     df["speaker"] = df.apply(lambda r: normalize_speaker(r["speaker"], r["central_bank"]), axis=1)
 
-    from meetings import ECB_MEETINGS
-    timeline_html = make_timeline(df, meetings=ECB_MEETINGS)
+    from meetings import get_meetings
+    timeline_html = make_timeline(df, meetings=get_meetings("ECB"))
     trend_html = make_trend_chart(df)
 
     from scraper_ecb import EXEC_BOARD
