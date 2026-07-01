@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 from datetime import date
 import pandas as pd
@@ -47,22 +48,83 @@ def wrap_text(text: str, width: int = 70) -> str:
     return "<br>".join(lines)
 
 
+# Gradient endpoints: light (small move) → dark (large move).
+_CUT_LIGHT, _CUT_DARK = (191, 219, 254), (30, 58, 138)   # #BFDBFE → #1E3A8A (navy)
+_HIKE_LIGHT, _HIKE_DARK = (254, 202, 202), (127, 29, 29)  # #FECACA → #7F1D1D (dark red)
+_BP_RE = re.compile(r"([+-]?\d+(?:\.\d+)?)\s*bp", re.I)
+
+
+def _rate_to_float(rate: str):
+    """Parse a rate string to a float percent. Ranges (en-dash) → midpoint."""
+    if not rate:
+        return None
+    s = rate.replace("%", "").strip()
+    parts = [p.strip() for p in s.split("–")]  # en-dash range separator
+    nums = []
+    for p in parts:
+        if not p or p == "-":
+            continue
+        try:
+            nums.append(float(p))
+        except ValueError:
+            return None
+    return sum(nums) / len(nums) if nums else None
+
+
+def _meeting_magnitudes(meetings) -> dict:
+    """Map date → absolute basis-point size of each hike/cut.
+
+    Prefers the explicit 'bp' figure in the label; falls back to the change in
+    the parsed rate versus the previous meeting. Used to scale the colour
+    gradient per bank so a country's largest move is the darkest line.
+    """
+    mags, prev_rate = {}, None
+    for m in meetings:
+        rate = _rate_to_float(m.get("rate", ""))
+        dec = m.get("decision", "")
+        if dec in ("hike", "cut"):
+            bp = None
+            mo = _BP_RE.search(m.get("label", ""))
+            if mo:
+                bp = abs(float(mo.group(1)))
+            elif rate is not None and prev_rate is not None:
+                bp = abs(rate - prev_rate) * 100
+            if bp:
+                mags[m["date"]] = bp
+        if rate is not None:
+            prev_rate = rate
+    return mags
+
+
+def _lerp(c1, c2, t):
+    return tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
+
+
 def _add_meeting_vlines(fig, meetings):
     """Add vertical lines for past committee meeting decisions. Hover for detail.
-    Upcoming meetings are skipped so they don't stretch the x-axis."""
+    Upcoming meetings are skipped so they don't stretch the x-axis.
+
+    Hike lines are red, cut lines blue, with intensity scaled to the size of the
+    move in basis points. The scale is per-bank: the largest move in this bank's
+    history maps to the darkest/thickest line, so a 100bp cut reads darker than a
+    25bp cut, and each country's range is calibrated to its own volatility."""
+    mags = _meeting_magnitudes(meetings)
+    max_bp = max(mags.values()) if mags else 0.0
+
     for m in meetings:
         dec = m.get("decision", "upcoming")
         if dec == "upcoming":
             continue
 
-        if dec == "hike":
-            line_color = "rgba(220,38,38,0.5)"
+        if dec in ("hike", "cut"):
+            bp = mags.get(m["date"], 0.0)
+            raw = min(bp / max_bp, 1.0) if max_bp > 0 else 0.5
+            light, dark = (_HIKE_LIGHT, _HIKE_DARK) if dec == "hike" else (_CUT_LIGHT, _CUT_DARK)
+            r, g, b = _lerp(light, dark, 0.25 + 0.75 * raw)
+            alpha = round(0.40 + 0.50 * raw, 2)
+            line_color = f"rgba({r},{g},{b},{alpha})"
             dash = "solid"
-            lw = 1.5
-        elif dec == "cut":
-            line_color = "rgba(37,99,235,0.5)"
-            dash = "solid"
-            lw = 1.5
+            lw = round(1.0 + 1.8 * raw, 1)
         else:
             line_color = "rgba(156,163,175,0.4)"
             dash = "dash"
