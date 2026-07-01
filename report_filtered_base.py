@@ -5,10 +5,11 @@ Each bank has a thin wrapper (report_ecb_filtered.py etc.) that calls
 generate_filtered_report() with bank-specific config.
 """
 
+import html as _html
 import json
 import re
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -22,6 +23,7 @@ from report_frb import (
     _add_meeting_vlines,
     SPEAKER_PALETTE,
 )
+from rater import SYSTEM as RATING_PROMPT
 
 DB_PATH = Path("data/speeches.db")
 
@@ -201,10 +203,13 @@ def make_timeline_with_ghosts(
             axis=1,
         )
         ghost_hover = [
-            f"<span style='color:#9CA3AF;font-weight:600'>{r['speaker']}</span><br>"
-            f"<span style='color:#9CA3AF'>{r.get('title_en') or r['title']}</span><br>"
-            f"<span style='color:#D1D5DB'>{r['date']}</span><br>"
-            f"<span style='color:#D1D5DB;font-size:11px'>Off-topic · not counted in signal</span>"
+            [
+                f"<span style='color:#9CA3AF;font-weight:600'>{r['speaker']}</span><br>"
+                f"<span style='color:#9CA3AF'>{r.get('title_en') or r['title']}</span><br>"
+                f"<span style='color:#D1D5DB'>{r['date']}</span><br>"
+                f"<span style='color:#D1D5DB;font-size:11px'>Off-topic · not counted in signal</span>",
+                r["url"],
+            ]
             for _, r in ghost.iterrows()
         ]
         fig.add_trace(go.Scatter(
@@ -215,18 +220,20 @@ def make_timeline_with_ghosts(
                 size=7,
                 line=dict(color="rgba(156,163,175,0.45)", width=1.5),
             ),
-            hovertemplate="%{customdata}<extra></extra>",
+            hovertemplate="%{customdata[0]}<extra></extra>",
             customdata=ghost_hover,
             showlegend=False,
             name="Off-topic",
         ))
 
+    # customdata carries [hover_html, url] so a click can jump to the table row.
+    solid_cd = [[h, u] for h, u in zip(hover_rel, asc["url"].tolist())]
     fig.add_trace(go.Scatter(
         x=asc["date"], y=asc["score"],
         mode="markers",
         marker=dict(color=colors, size=9, line=dict(color="white", width=1.5)),
-        hovertemplate="%{customdata}<extra></extra>",
-        customdata=hover_rel,
+        hovertemplate="%{customdata[0]}<extra></extra>",
+        customdata=solid_cd,
         showlegend=False,
     ))
 
@@ -255,6 +262,181 @@ def make_timeline_with_ghosts(
         _add_meeting_vlines(fig, meetings)
     return pio.to_html(fig, include_plotlyjs=True, full_html=False,
                        config={"displayModeBar": False, "responsive": True})
+
+
+def make_trend_chart_linked(df: pd.DataFrame) -> str:
+    """Per-speaker trajectory chart; each marker's customdata carries [hover_html, url]
+    so clicking a dot can jump to that speech in the table. Same trace structure as
+    report_frb.make_trend_chart so the trend-legend highlight logic still works."""
+    df = df[df["score"] > 0]
+    counts = df.groupby("speaker")["score"].count()
+    speakers = sorted(counts[counts >= 2].index.tolist())
+    color_map = {sp: SPEAKER_PALETTE[i % len(SPEAKER_PALETTE)] for i, sp in enumerate(speakers)}
+
+    fig = go.Figure()
+    fig.add_hrect(y0=7, y1=10, fillcolor="rgba(220,38,38,0.04)", line_width=0)
+    fig.add_hrect(y0=1, y1=3, fillcolor="rgba(37,99,235,0.04)", line_width=0)
+
+    for speaker in speakers:
+        sdf = df[df["speaker"] == speaker].sort_values("date")
+        color = color_map[speaker]
+        avg = sdf["score"].mean()
+        short = speaker.split()[-1]
+        date_range = f"{sdf['date'].min()} – {sdf['date'].max()}"
+        cd = [
+            [
+                f"<span style='color:#111827;font-weight:600'>{speaker}</span><br>"
+                f"<span style='color:#374151'>{r.get('title_en') or r['title']}</span><br>"
+                f"<span style='color:#6B7280'>{r['date']}</span><br><br>"
+                f"<span style='color:{score_color(r['score'])};font-weight:700'>{r['score']}/10 — {tone(r['score'])}</span><br>"
+                f"<span style='color:#9CA3AF;font-size:11px'>Avg {avg:.1f} · {date_range}</span>",
+                r["url"],
+            ]
+            for _, r in sdf.iterrows()
+        ]
+        fig.add_trace(go.Scatter(
+            x=sdf["date"], y=sdf["score"], mode="lines",
+            name=short, legendgroup=speaker, showlegend=False,
+            line=dict(color=color, width=1.5), hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=sdf["date"], y=sdf["score"], mode="markers",
+            name=short, legendgroup=speaker, showlegend=False,
+            marker=dict(color=color, size=8, line=dict(color="white", width=1.5), opacity=0.9),
+            hovertemplate="%{customdata[0]}<extra></extra>", customdata=cd,
+        ))
+
+    fig.update_layout(
+        height=380, margin=dict(l=48, r=20, t=24, b=40),
+        paper_bgcolor="white", plot_bgcolor="white",
+        font=dict(family="system-ui, -apple-system, sans-serif", size=11, color="#6B7280"),
+        yaxis=dict(range=[0.5, 10.5], tickvals=[1, 3, 5, 7, 10],
+                   gridcolor="#F0F1F3", gridwidth=1, zeroline=False, title=None),
+        xaxis=dict(gridcolor="#F0F1F3", gridwidth=1, zeroline=False, title=None, tickformat="%b %Y"),
+        showlegend=False,
+        hoverlabel=dict(bgcolor="white", bordercolor="#E4E8EF",
+                        font=dict(size=12, color="#111827",
+                                  family="system-ui, -apple-system, sans-serif"),
+                        align="left", namelength=0),
+        annotations=[
+            dict(x=0, xref="paper", y=10, yref="y", text="HAWK", showarrow=False,
+                 font=dict(size=9, color="#DC2626", family="system-ui"), xanchor="left"),
+            dict(x=0, xref="paper", y=1, yref="y", text="DOVE", showarrow=False,
+                 font=dict(size=9, color="#2563EB", family="system-ui"), xanchor="left"),
+        ],
+    )
+    return pio.to_html(fig, include_plotlyjs=False, full_html=False,
+                       config={"displayModeBar": False, "responsive": True})
+
+
+# ---------------------------------------------------------------------------
+# Current-rate box + "since last decision" sentiment gauge
+# ---------------------------------------------------------------------------
+
+def _current_rate_box(meetings, label: str = "Current policy rate") -> str:
+    """Compact strip showing the active policy rate, the last decision (with a
+    hike/cut/hold arrow) and how long the rate has been unchanged. "" if no data."""
+    past = sorted(
+        [m for m in (meetings or []) if m.get("decision") != "upcoming" and m.get("rate")],
+        key=lambda m: m["date"],
+    )
+    if not past:
+        return ""
+    latest = past[-1]
+    rate = _html.escape(latest.get("rate", ""))
+    dec = latest.get("decision", "hold")
+    move_label = _html.escape(latest.get("label", "").replace("\n", " ").strip())
+
+    def _fmt(d, short=False):
+        dt = datetime.strptime(d, "%Y-%m-%d")
+        return dt.strftime("%b %Y") if short else f"{dt.strftime('%b')} {dt.day}, {dt.year}"
+
+    arrows = {"hike": "&#9650;", "cut": "&#9660;", "hold": "&mdash;"}
+    arrow = arrows.get(dec, "&mdash;")
+    move_class = dec if dec in ("hike", "cut", "hold") else "hold"
+    changes = [m for m in past if m.get("decision") in ("hike", "cut")]
+    since = changes[-1]["date"] if changes else past[0]["date"]
+
+    return (
+        '<div class="rate-box">'
+        f'<span class="rate-box-label">{label}</span>'
+        f'<span class="rate-box-value">{rate}</span>'
+        f'<span class="rate-box-move {move_class}"><span class="arrow">{arrow}</span>{move_label}</span>'
+        f'<span class="rate-box-since">unchanged since {_fmt(since, short=True)}</span>'
+        '</div>'
+    )
+
+
+def _lerp_hex(c1: str, c2: str, t: float) -> str:
+    t = max(0.0, min(1.0, t))
+    a = tuple(int(c1[i:i + 2], 16) for i in (1, 3, 5))
+    b = tuple(int(c2[i:i + 2], 16) for i in (1, 3, 5))
+    r, g, bl = (round(a[j] + (b[j] - a[j]) * t) for j in range(3))
+    return f"#{r:02X}{g:02X}{bl:02X}"
+
+
+def _lean_style(avg: float):
+    """(label, arrow, colour) for an average score. 4–6 neutral; <4 dovish, >6 hawkish,
+    colour deepening with conviction. 'Leaning' for the mild zone, decisive past 2/8."""
+    if avg < 4:
+        t = (4 - avg) / 3.0
+        label = "Dovish" if avg < 2 else "Leaning dovish"
+        return label, "&#9662;", _lerp_hex("#93C5FD", "#1E3A8A", t)
+    if avg > 6:
+        t = (avg - 6) / 4.0
+        label = "Hawkish" if avg > 8 else "Leaning hawkish"
+        return label, "&#9652;", _lerp_hex("#FCA5A5", "#7F1D1D", t)
+    return "Neutral", "", NEUTRAL_GREEN
+
+
+def _since_meeting_card(df_relevant: pd.DataFrame, meetings,
+                        decision_name: str = "policy decision") -> str:
+    """Aggregate tone of relevant speeches since the most recent committee decision
+    into a soft dovish/hawkish read. "" if no meeting data."""
+    past = sorted([m for m in (meetings or []) if m.get("decision") != "upcoming" and m.get("date")],
+                  key=lambda m: m["date"])
+    if not past:
+        return ""
+    lm = past[-1]
+    md = lm["date"]
+    dt = datetime.strptime(md, "%Y-%m-%d")
+    md_fmt = f"{dt.strftime('%b')} {dt.day}, {dt.year}"
+    label = _html.escape((lm.get("label") or lm.get("decision", "")).replace("\n", " ").strip())
+    header = f"Since the last {decision_name} &middot; {md_fmt}" + (f" ({label})" if label else "")
+
+    sub = df_relevant[(df_relevant["date"] > md) & (df_relevant["score"] > 0)]
+    if sub.empty:
+        return ('<div class="since-card">'
+                f'<div class="since-label">{header}</div>'
+                '<div class="since-empty">No policy-relevant speeches yet since this meeting.</div>'
+                '</div>')
+
+    scores = sub["score"].astype(float)
+    n = len(sub)
+    avg = scores.mean()
+    n_dove = int((scores <= 3).sum())
+    n_neut = int(((scores >= 4) & (scores <= 6)).sum())
+    n_hawk = int((scores >= 7).sum())
+    lean, arrow, col = _lean_style(avg)
+    arrow_html = f'<span class="since-arrow">{arrow}</span>' if arrow else ""
+    plural = "es" if n != 1 else ""
+    stats = (f"{n} relevant speech{plural} &middot; avg {avg:.1f}/10 &middot; "
+             f"{n_dove} dovish &middot; {n_neut} neutral &middot; {n_hawk} hawkish")
+    if n < 3:
+        stats += (f'<br><span class="since-lowconf">Limited signal '
+                  f'&mdash; only {n} speech{plural} so far</span>')
+
+    return (
+        '<div class="since-card">'
+        f'<div class="since-label">{header}</div>'
+        '<div class="since-body">'
+        f'<div class="since-verdict" style="color:{col}">{arrow_html}{lean}</div>'
+        f'<div class="since-stats">{stats}</div>'
+        '</div>'
+        '<div class="since-caveat">Aggregate tone of public remarks since the meeting '
+        '&mdash; a read on rhetoric, not a forecast of the next rate decision.</div>'
+        '</div>'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -643,6 +825,8 @@ tbody tr:last-child td{{border-bottom:none}}
 tbody tr{{cursor:pointer;transition:background .1s}}
 tbody tr:hover td{{background:#FAFBFC}}
 tbody tr.expanded td{{background:#FAFBFC}}
+@keyframes rowflash{{0%{{background:#FDE68A}}55%{{background:#FEF3C7}}100%{{background:transparent}}}}
+tbody tr.flash td{{animation:rowflash 1.7s ease-out}}
 
 tbody tr.off-topic{{opacity:0.35}}
 tbody tr.off-topic:hover{{opacity:0.6}}
@@ -677,6 +861,14 @@ tr.expanded .td-justification{{max-height:320px;opacity:1;margin-top:7px}}
 
 .td-body-section{{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s ease,opacity .25s ease,margin-top .2s ease;margin-top:0}}
 tr.expanded .td-body-section{{max-height:520px;opacity:1;margin-top:12px}}
+
+/* Supporting quotes (evidence for the score) */
+.td-evidence{{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s ease,opacity .25s ease,margin-top .2s ease;margin-top:0}}
+tr.expanded .td-evidence{{max-height:520px;opacity:1;margin-top:12px}}
+.ev-quote{{font-size:12.5px;line-height:1.6;color:#374151;background:#F9FAFB;border-left:3px solid #D1D5DB;border-radius:0 4px 4px 0;padding:8px 12px;margin:6px 0}}
+.ev-quote::before{{content:'\\201C'}}.ev-quote::after{{content:'\\201D'}}
+.ev-quote.ev-hawk{{border-left-color:#DC2626;background:#FEF2F2}}
+.ev-quote.ev-dove{{border-left-color:#2563EB;background:#EFF4FE}}
 .td-body-label{{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9CA3AF;display:block;margin-bottom:10px;padding-top:10px;border-top:1px solid #E4E8EF}}
 .td-body{{font-size:12.5px;color:#374151;line-height:1.8;max-height:480px;overflow-y:auto;padding-right:10px}}
 .sp-p{{margin:0 0 0.85em;color:#374151}}.sp-p:last-child{{margin-bottom:0}}
@@ -718,6 +910,15 @@ tr.expanded .chevron{{transform:rotate(180deg)}}
 .mk-hike{{background:#DC2626}}
 .mk-cut{{background:#2563EB}}
 .mk-hold{{background:repeating-linear-gradient(90deg,rgba(156,163,175,0.7) 0,rgba(156,163,175,0.7) 5px,transparent 5px,transparent 9px)}}
+.rate-box{{display:inline-flex;align-items:baseline;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #E4E8EF;border-radius:5px;padding:7px 13px;margin-top:10px;font-size:12px}}
+.rate-box-label{{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9CA3AF}}
+.rate-box-value{{font-weight:700;font-size:14px;color:#111827;font-variant-numeric:tabular-nums}}
+.rate-box-move{{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600}}
+.rate-box-move .arrow{{font-size:11px;line-height:1}}
+.rate-box-move.hike{{color:#B91C1C}}
+.rate-box-move.cut{{color:#1D4ED8}}
+.rate-box-move.hold{{color:#6B7280}}
+.rate-box-since{{font-size:11px;color:#9CA3AF}}
 
 .stats-wrap{{background:#fff;border:1px solid #E4E8EF;border-radius:6px;overflow-x:auto}}
 .stats-table{{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;table-layout:auto}}
@@ -733,6 +934,9 @@ tr.expanded .chevron{{transform:rotate(180deg)}}
 .spk-trend-hawk{{color:#DC2626;font-weight:600}}
 .spk-trend-dove{{color:#2563EB;font-weight:600}}
 .spk-trend-flat{{color:#9CA3AF}}
+.trend-line{{display:flex;align-items:center;gap:7px;white-space:nowrap;line-height:1.7;font-size:12px}}
+.trend-line+.trend-line{{margin-top:1px}}
+.trend-lbl{{font-size:9px;font-weight:700;letter-spacing:.06em;color:#B0B6BE;min-width:16px}}
 .no-flag{{color:#D1D5DB}}
 .flag-chip{{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:11px;margin:2px 3px 2px 0;cursor:default;white-space:nowrap;line-height:1.4}}
 .flag-hawk{{background:#FEE2E2;color:#B91C1C}}
@@ -743,6 +947,33 @@ tr.expanded .chevron{{transform:rotate(180deg)}}
   font-size:11px;color:#6B7280;background:#F9FAFB;border:1px solid #E4E8EF;
   border-radius:4px;padding:8px 12px;margin-bottom:16px;
 }}
+
+/* Scoring methodology panel */
+.method{{background:#fff;border:1px solid #E4E8EF;border-radius:6px;margin-bottom:40px;overflow:hidden}}
+.method>summary{{list-style:none;cursor:pointer;padding:15px 20px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;color:#374151;user-select:none}}
+.method>summary::-webkit-details-marker{{display:none}}
+.method>summary:hover{{background:#FAFBFC}}
+.method-icon{{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#EEF2FF;color:#4F46E5;font-size:12px;font-weight:700;flex-shrink:0}}
+.method-sub{{font-size:11px;font-weight:400;color:#9CA3AF;margin-left:2px}}
+.method-chevron{{margin-left:auto;color:#9CA3AF;font-size:11px;transition:transform .2s ease}}
+.method[open] .method-chevron{{transform:rotate(180deg)}}
+.method-body{{padding:0 20px 20px;border-top:1px solid #F3F4F6}}
+.method-intro{{font-size:12.5px;color:#6B7280;line-height:1.7;margin:16px 0 14px;max-width:74ch}}
+.method-intro code{{background:#F3F4F6;border-radius:3px;padding:1px 5px;font-size:11.5px;color:#374151;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}}
+.method-prompt-label{{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9CA3AF;margin-bottom:8px}}
+.method-prompt{{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.65;color:#374151;background:#F9FAFB;border:1px solid #E4E8EF;border-radius:5px;padding:16px 18px;white-space:pre-wrap;word-break:break-word;max-height:440px;overflow-y:auto}}
+.method-foot{{font-size:11px;color:#9CA3AF;margin-top:12px;line-height:1.6}}
+
+/* "Since the last decision" sentiment gauge */
+.since-card{{background:#fff;border:1px solid #E4E8EF;border-radius:6px;padding:20px 26px;margin-bottom:40px}}
+.since-label{{font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9CA3AF;margin-bottom:14px}}
+.since-body{{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}}
+.since-verdict{{font-family:Georgia,serif;font-size:26px;font-weight:normal;line-height:1;display:inline-flex;align-items:baseline;gap:8px}}
+.since-arrow{{font-size:19px}}
+.since-stats{{font-size:12.5px;color:#6B7280;line-height:1.6}}
+.since-empty{{font-size:13px;color:#9CA3AF}}
+.since-lowconf{{color:#B45309;font-weight:600}}
+.since-caveat{{font-size:11px;color:#9CA3AF;margin-top:14px;line-height:1.6;max-width:72ch}}
 </style>
 </head>
 <body>
@@ -757,14 +988,42 @@ tr.expanded .chevron{{transform:rotate(180deg)}}
   <div class="header-meta" id="hm"></div>
 </header>
 
+<details class="method">
+  <summary>
+    <span class="method-icon">?</span>
+    How is each speech scored?
+    <span class="method-sub">View the exact prompt used to judge hawkishness / dovishness</span>
+    <span class="method-chevron">&#8964;</span>
+  </summary>
+  <div class="method-body">
+    <p class="method-intro">
+      Every speech is read by an LLM (OpenAI <code>gpt-4.1</code>, temperature&nbsp;0) and rated on a
+      0&ndash;10 hawkish&ndash;dovish scale. <strong>0</strong> means off-topic (no monetary-policy signal),
+      <strong>1&ndash;3</strong> dovish, <strong>4&ndash;6</strong> neutral, <strong>7&ndash;10</strong> hawkish.
+      The model also returns the one- or two-sentence justification you see when you expand a row.
+      Below is the <em>verbatim</em> system prompt that instructs the model &mdash; the same one applied to every
+      speech in every report, so scoring is consistent across banks, speakers and dates.
+    </p>
+    <div class="method-prompt-label">System prompt &middot; verbatim</div>
+    <div class="method-prompt">{scoring_prompt}</div>
+    <p class="method-foot">
+      Each speech is sent with its title, speaker, date, the policy rate in effect at the time, and the
+      speaker's recent scoring history, followed by the full speech text.
+    </p>
+  </div>
+</details>
+
 <div id="latest-wrap"></div>
+
+{since_card}
 
 <section class="chart-section">
   <div class="section-header">
     <span class="section-title">Score History &middot; Last 5 Years &middot; Hollow dots = off-topic (not counted)</span>
     <div class="section-rule"></div>
   </div>
-  <div class="chart-wrap">{timeline}</div>
+  <div class="chart-wrap" id="timeline-chart">{timeline}</div>
+  {rate_box}
   <div class="meeting-key">
     <span class="mk-item"><span class="mk-line mk-hike"></span>Rate hike</span>
     <span class="mk-item"><span class="mk-line mk-cut"></span>Rate cut</span>
@@ -841,6 +1100,7 @@ function scoreColor(s){{
 }}
 function tone(s){{return s<=3?'Dovish':s<=6?'Neutral':'Hawkish'}}
 function fmt(iso){{return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{{month:'short',day:'numeric',year:'numeric'}})}}
+function escHtml(s){{return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}}
 
 const n=DATA.length;
 const nRelev=DATA.filter(d=>d.relevant).length;
@@ -939,12 +1199,15 @@ document.getElementById('tbody').innerHTML=byDate.map((d,i)=>{{
   const bodySection=hasBody?'<div class="td-body-section"><span class="td-body-label">Full speech text</span><div class="td-body"></div></div>':'';
   const rUrl=realUrl(d.url);
   const sourceBtn=rUrl?'<div class="td-source-link"><a class="source-btn" href="'+rUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">View original speech ↗</a></div>':'';
+  let evq=[];try{{evq=d.evidence_quotes?(typeof d.evidence_quotes==='string'?JSON.parse(d.evidence_quotes):d.evidence_quotes):[];}}catch(e){{evq=[];}}
+  const evidenceSection=(evq&&evq.length)?'<div class="td-evidence"><span class="td-body-label">Supporting quotes</span>'+evq.map(q=>'<div class="ev-quote ev-'+(q.lean==='hawkish'?'hawk':'dove')+'">'+escHtml(q.quote)+'</div>').join('')+'</div>':'';
   return`<tr class="${{rowCls}}" data-idx="${{i}}">
     <td class="td-date">${{fmt(d.date)}}</td>
     <td class="td-speaker" title="${{d.speaker}}">${{d.speaker}}</td>
     <td>
       <div class="title-text"><a href="${{rUrl}}" target="_blank" onclick="event.stopPropagation()">${{d.title_en||d.title}}</a>${{badge}}</div>
       <div class="td-justification">${{d.justification||''}}</div>
+      ${{evidenceSection}}
       ${{sourceBtn}}
       ${{bodySection}}
     </td>
@@ -1044,6 +1307,21 @@ function toggleOffTopic(){{
     if(!spk[d.speaker])spk[d.speaker]=[];
     spk[d.speaker].push(d);
   }});
+  function halfTrend(arr){{
+    const m=arr.length;
+    if(m<4) return null;
+    const half=Math.floor(m/2);
+    const mean=a=>a.reduce((x,d)=>x+d.score,0)/a.length;
+    const d=mean(arr.slice(m-half))-mean(arr.slice(0,half));
+    return {{dir:d>0.7?'hawk':d<-0.7?'dove':'flat',d:d,n:m}};
+  }}
+  function trendChip(t,label,win){{
+    if(!t) return '<div class="trend-line" title="'+win+': not enough speeches for a trend"><span class="trend-lbl">'+label+'</span><span class="spk-trend-flat">—</span></div>';
+    const txt=t.dir==='hawk'?'<span class="spk-trend-hawk">↑ Hawkish</span>':t.dir==='dove'?'<span class="spk-trend-dove">↓ Dovish</span>':'<span class="spk-trend-flat">→ Stable</span>';
+    const tip=win+' ('+t.n+' speeches): later half '+(t.d>0?'+':'')+t.d.toFixed(1)+' vs earlier half';
+    return '<div class="trend-line" title="'+tip+'"><span class="trend-lbl">'+label+'</span>'+txt+'</div>';
+  }}
+  const oneYearAgo=new Date();oneYearAgo.setFullYear(oneYearAgo.getFullYear()-1);
   const rows=Object.entries(spk)
     .map(([name,sps])=>{{
       sps.sort((a,b)=>a.date.localeCompare(b.date));
@@ -1051,9 +1329,11 @@ function toggleOffTopic(){{
       const n=sc.length;
       const avg=sc.reduce((a,b)=>a+b,0)/n;
       const std=n>1?Math.sqrt(sc.reduce((a,b)=>a+(b-avg)**2,0)/n):0;
-      const trend=n>=4?(()=>{{const r=sc.slice(-3).reduce((a,b)=>a+b,0)/3-avg;return r>0.7?'hawk':r<-0.7?'dove':'flat'}})():null;
+      const sps1y=sps.filter(s=>new Date(s.date+'T00:00:00')>=oneYearAgo);
+      const trend1y=halfTrend(sps1y);
+      const trend5y=halfTrend(sps);
       const flags=n>=3?sps.filter(s=>Math.abs(s.score-avg)>=2.5):[];
-      return{{name,n,avg,std,trend,flags}};
+      return{{name,n,avg,std,trend1y,trend5y,flags}};
     }})
     .filter(r=>r.n>=1)
     .sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name));
@@ -1062,7 +1342,7 @@ function toggleOffTopic(){{
   const cutoff=new Date();cutoff.setDate(cutoff.getDate()-90);
   tb.innerHTML=rows.map(r=>{{
     const ac=scoreColor(Math.round(r.avg));
-    const tr2=r.trend===null?'<span class="spk-trend-flat">—</span>':r.trend==='hawk'?'<span class="spk-trend-hawk">↑ Hawkish</span>':r.trend==='dove'?'<span class="spk-trend-dove">↓ Dovish</span>':'<span class="spk-trend-flat">→ Stable</span>';
+    const trCell=trendChip(r.trend1y,'1Y','Last 12 months')+trendChip(r.trend5y,'5Y','Full 5-year window');
     const fl=r.flags.length===0?'<span class="no-flag">—</span>':r.flags.map(f=>{{
       const dev=f.score-r.avg;
       const isRecent=new Date(f.date)>=cutoff;
@@ -1075,11 +1355,57 @@ function toggleOffTopic(){{
       <td><span class="st-avg" style="color:${{ac}}">${{r.avg.toFixed(1)}}</span></td>
       <td class="st-meta">${{r.n>1?r.std.toFixed(2):'—'}}</td>
       <td class="st-meta">${{r.n}}</td>
-      <td>${{tr2}}</td>
+      <td>${{trCell}}</td>
       <td>${{fl}}</td>
     </tr>`;
   }}).join('');
 }})();
+
+// --- Click a chart dot -> reveal & scroll to that speech in the table ---
+function jumpToSpeech(url){{
+  if(!url) return;
+  const rows=[...document.querySelectorAll('#tbody tr')];
+  const row=rows.find(r=>{{const d=byDate[parseInt(r.dataset.idx)];return d&&d.url===url;}});
+  if(!row) return;
+  const sel=document.getElementById('speaker-filter');
+  if(sel) sel.value='';
+  if(row.classList.contains('off-topic')&&!offVisible){{ toggleOffTopic(); }}
+  else {{ applyTableFilters(); }}
+  if(!row.classList.contains('expanded')){{
+    row.classList.add('expanded');
+    const bodyDiv=row.querySelector('.td-body');
+    if(bodyDiv&&!bodyDiv.dataset.loaded){{
+      const di=byDate[parseInt(row.dataset.idx)];
+      bodyDiv.innerHTML=fmtBody(di.body_en||di.body||'',realUrl(di.url||''));
+      bodyDiv.dataset.loaded='1';
+    }}
+  }}
+  row.scrollIntoView({{behavior:'smooth',block:'center'}});
+  row.classList.remove('flash');
+  void row.offsetWidth;
+  row.classList.add('flash');
+  setTimeout(()=>row.classList.remove('flash'),1700);
+}}
+(function bindDotClicks(tries){{
+  tries=tries||0;
+  const sels=['#timeline-chart .plotly-graph-div','.trend-container .plotly-graph-div'];
+  let allReady=true;
+  sels.forEach(sel=>{{
+    const gd=document.querySelector(sel);
+    if(!gd) return;
+    if(!gd.on){{ allReady=false; return; }}
+    if(gd.dataset.clickBound) return;
+    gd.dataset.clickBound='1';
+    gd.on('plotly_click',function(e){{
+      const pt=e.points&&e.points[0];
+      if(!pt||!pt.customdata) return;
+      const url=Array.isArray(pt.customdata)?pt.customdata[1]:null;
+      jumpToSpeech(url);
+    }});
+    gd.style.cursor='pointer';
+  }});
+  if(!allReady&&tries<25) setTimeout(()=>bindDotClicks(tries+1),150);
+}})(0);
 </script>
 </body>
 </html>"""
@@ -1148,7 +1474,7 @@ def generate_filtered_report(
     df_offtopic = df[df["relevant_to_mp"] == 0].copy()
 
     timeline_html = make_timeline_with_ghosts(df_relevant, df_offtopic, meetings=meetings)
-    trend_html = make_trend_chart(df_relevant)
+    trend_html = make_trend_chart_linked(df_relevant)
     theme_html = make_watchlist_chart(df)
 
     active_members_json = json.dumps(sorted(active_members))
@@ -1172,6 +1498,9 @@ def generate_filtered_report(
             theme_chart=theme_html,
             data=json.dumps(records, default=str),
             active_members_json=active_members_json,
+            scoring_prompt=_html.escape(RATING_PROMPT),
+            rate_box=_current_rate_box(meetings),
+            since_card=_since_meeting_card(df_relevant, meetings),
         )
     )
     output_path.write_text(html, encoding="utf-8")

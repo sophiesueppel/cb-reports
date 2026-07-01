@@ -838,6 +838,37 @@ def main() -> None:
         except Exception as e:
             print(f"  !! Emerging topics scan FAILED: {e}")
 
+    # --- Supporting quotes for any newly rated directional speeches ---
+    if all_new:
+        try:
+            from backfill_evidence_quotes import backfill_quotes
+            print("\nExtracting supporting quotes for new directional speeches ...")
+            processed, _ = backfill_quotes()
+            if processed:
+                # Regenerate affected banks' reports so the quotes appear same-day.
+                REGEN = {
+                    "Federal Reserve": generate_fed_filtered_report,
+                    "ECB": generate_ecb_filtered_report,
+                    "Bank of England": generate_boe_filtered_report,
+                    "Bank of Japan": generate_boj_filtered_report,
+                    "BCB": generate_bcb_filtered_report,
+                    "Riksbank": generate_riksbank_filtered_report,
+                    "SARB": generate_sarb_filtered_report,
+                    "CNB": generate_cnb_filtered_report,
+                    "NBP": generate_nbp_filtered_report,
+                    "BNR": generate_bnr_filtered_report,
+                    "CBRT": generate_cbrt_filtered_report,
+                }
+                for b in {r.get("central_bank") for r in all_new}:
+                    gen = REGEN.get(b)
+                    if gen:
+                        try:
+                            gen()
+                        except Exception as e:
+                            print(f"  regen {b} report failed: {e}")
+        except Exception as e:
+            print(f"  !! Evidence-quote extraction FAILED: {e}")
+
     # --- Back up the database off-machine (OneDrive) ---
     print("\nBacking up database ...")
     backup_db()

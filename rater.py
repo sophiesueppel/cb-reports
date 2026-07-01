@@ -264,3 +264,118 @@ def rate_speech(
         result["topic_scores"] = None
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Evidence quotes — verbatim lines supporting the hawkish/dovish score
+# ---------------------------------------------------------------------------
+
+import re as _re
+import unicodedata as _ud
+
+
+def _normalize_for_match(s: str) -> str:
+    """Fold trivial differences so a quote can be matched against the speech text:
+    unify quotes/dashes, strip accents, collapse whitespace, lowercase."""
+    if not s:
+        return ""
+    s = _ud.normalize("NFKD", s)
+    s = "".join(c for c in s if not _ud.combining(c))
+    trans = {
+        "‘": "'", "’": "'", "“": '"', "”": '"',
+        "–": "-", "—": "-", "−": "-", " ": " ",
+    }
+    for a, b in trans.items():
+        s = s.replace(a, b)
+    s = _re.sub(r"\s+", " ", s)
+    return s.strip().lower()
+
+
+def extract_evidence_quotes(text: str, score: int, justification: str = "",
+                            title: str = "", max_quotes: int = 4) -> list:
+    """Pull 2–4 VERBATIM quotes from a directional speech that convey its hawkish or
+    dovish lean. Returns a list of {"quote": str, "lean": "hawkish"|"dovish"}.
+
+    Only meaningful for directional scores (<=3 dovish, >=7 hawkish); returns [] for
+    neutral/off-topic. Every returned quote is validated as a real substring of the
+    speech text (after normalising quotes/dashes/whitespace) — hallucinated or
+    paraphrased quotes are dropped."""
+    if score is None:
+        return []
+    score = int(score)
+    if 4 <= score <= 6 or score == 0:
+        return []
+    lean = "dovish" if score <= 3 else "hawkish"
+
+    system_msg = (
+        "You extract VERBATIM supporting quotes from a central bank speech that justify "
+        f"its {lean} rating. Copy sentences or clauses EXACTLY from the speech — word for "
+        "word, same punctuation, no paraphrasing, no inserted ellipses, no square-bracket "
+        f"edits. Choose 2 to {max_quotes} short, self-contained quotes that most clearly "
+        f"convey the {lean} monetary-policy lean (rate path, inflation, labour market, "
+        "risk framing). Prefer punchy single sentences. Do not invent text."
+    )
+    user_msg = (
+        f'Title: "{title}"\n'
+        f"Assigned score: {score}/10 ({lean})\n"
+        f"Rating justification: {justification}\n\n"
+        f"---\n\n{text}"
+    )
+
+    tool = [{
+        "type": "function",
+        "function": {
+            "name": "submit_quotes",
+            "description": "Submit verbatim supporting quotes for the speech's rating.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "quotes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "quote": {"type": "string",
+                                          "description": "Verbatim text copied exactly from the speech."},
+                                "lean": {"type": "string", "enum": ["hawkish", "dovish"]},
+                            },
+                            "required": ["quote", "lean"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["quotes"],
+                "additionalProperties": False,
+            },
+        },
+    }]
+
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        temperature=0,
+        tools=tool,
+        tool_choice={"type": "function", "function": {"name": "submit_quotes"}},
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+    )
+    raw = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
+    quotes = raw.get("quotes") or []
+
+    # Verbatim validation: keep only quotes that genuinely appear in the speech.
+    norm_text = _normalize_for_match(text)
+    seen = set()
+    validated = []
+    for q in quotes:
+        qt = (q.get("quote") or "").strip().strip('"').strip()
+        if len(qt) < 12:
+            continue
+        nq = _normalize_for_match(qt)
+        if nq and nq in norm_text and nq not in seen:
+            seen.add(nq)
+            validated.append({"quote": qt, "lean": q.get("lean", lean)})
+        if len(validated) >= max_quotes:
+            break
+    return validated
