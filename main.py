@@ -693,7 +693,24 @@ def refresh_meetings() -> None:
 
     today = date.today().isoformat()
     print("\nRefreshing rate decisions from official sites ...")
+
+    # BIS-backed banks (CBRT/BNR/NBP): their own decision pages are JavaScript-rendered
+    # and return an empty shell to the LLM extractor (it silently failed for a year).
+    # Pull the authoritative policy rate from the BIS CBPOL series instead.
+    try:
+        from meetings_bis import BIS_AREA, sync_bank_from_bis
+        for bank in BIS_AREA:
+            try:
+                sync_bank_from_bis(bank)
+            except Exception as e:
+                print(f"  {bank}: BIS sync failed ({e})")
+    except Exception as e:
+        print(f"  BIS sync unavailable ({e})")
+        BIS_AREA = {}
+
     for bank in SOURCES:
+        if bank in BIS_AREA:
+            continue  # handled via BIS above (own site unscrapeable)
         try:
             rows = fetch_and_extract(bank, today)
         except Exception as e:

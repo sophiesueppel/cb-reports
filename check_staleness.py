@@ -21,12 +21,26 @@ non-zero if any CRITICAL alert (so cron / the daily pipeline can act on it).
 Run:  python check_staleness.py
 """
 import os
+import re
 import sqlite3
 import sys
 from datetime import date, datetime
 from pathlib import Path
 
+# BIS cross-check for banks fed from the BIS policy-rate series (CBRT/BNR/NBP).
+try:
+    from meetings_bis import BIS_AREA as _BIS_AREA, bis_daily_series
+except Exception:  # keep the monitor usable even if the BIS module is unavailable
+    _BIS_AREA, bis_daily_series = {}, None
+
 DB_PATH = Path(os.environ.get("CB_DB_PATH", "data/speeches.db"))
+
+
+def _rate_to_float(s):
+    if not s:
+        return None
+    m = re.search(r"-?\d+(?:\.\d+)?", str(s).replace("%", ""))
+    return float(m.group()) if m else None
 
 DECISION_STALE_DAYS = 60   # every tracked bank meets at least ~every 6-8 weeks
 SPEECH_STALE_DAYS = 45     # generous; below this even quiet banks usually speak
@@ -62,22 +76,43 @@ def run_staleness_check(db_path=DB_PATH, decision_days=DECISION_STALE_DAYS,
 
         # --- Rate decisions ---
         if has_meetings:
-            last_dec = conn.execute(
-                "SELECT MAX(date) FROM meetings WHERE bank=? AND decision!='upcoming'", (b,)
-            ).fetchone()[0]
-            dage = _age_days(last_dec, today)
-            missed = conn.execute(
-                "SELECT COUNT(*), MIN(date) FROM meetings WHERE bank=? AND decision='upcoming' AND date<?",
-                (b, today)).fetchone()
-            n_missed, oldest_missed = missed[0], missed[1]
-            if dage is not None and dage > decision_days:
-                alerts.append({"severity": "CRITICAL", "bank": b, "kind": "decisions",
-                               "detail": f"last recorded rate decision is {dage}d old ({last_dec}); "
-                                         f"{n_missed} past meeting(s) unrecorded (since {oldest_missed})"})
-            elif n_missed > 0:
-                alerts.append({"severity": "WARN", "bank": b, "kind": "decisions",
-                               "detail": f"{n_missed} past meeting(s) still marked 'upcoming' "
-                                         f"(oldest {oldest_missed}); latest recorded {last_dec}"})
+            last_row = conn.execute(
+                "SELECT date, rate FROM meetings WHERE bank=? AND decision!='upcoming' "
+                "ORDER BY date DESC LIMIT 1", (b,)).fetchone()
+            last_dec, last_rate = (last_row or (None, None))
+
+            if b in _BIS_AREA:
+                # Authoritative cross-check: does our recorded rate match BIS's live rate?
+                # A long-standing hold then reads as FRESH (match); a wrong/stale rate as CRITICAL.
+                try:
+                    pts = bis_daily_series(_BIS_AREA[b], start=f"{today[:4]}-01")
+                    bis_date, bis_rate = pts[-1]
+                    our = _rate_to_float(last_rate)
+                    if _age_days(bis_date, today) > 14:
+                        alerts.append({"severity": "WARN", "bank": b, "kind": "decisions",
+                                       "detail": f"BIS series itself looks stale (latest {bis_date}) — can't verify"})
+                    elif our is None or abs(our - bis_rate) > 0.02:
+                        alerts.append({"severity": "CRITICAL", "bank": b, "kind": "decisions",
+                                       "detail": f"recorded rate {last_rate} (as of {last_dec}) ≠ BIS live "
+                                                 f"{bis_rate:.2f}% ({bis_date}) — data wrong or stale"})
+                    # else: match → fresh (holding), no alert
+                except Exception as e:
+                    alerts.append({"severity": "WARN", "bank": b, "kind": "decisions",
+                                   "detail": f"BIS cross-check failed: {e}"})
+            else:
+                dage = _age_days(last_dec, today)
+                missed = conn.execute(
+                    "SELECT COUNT(*), MIN(date) FROM meetings WHERE bank=? AND decision='upcoming' AND date<?",
+                    (b, today)).fetchone()
+                n_missed, oldest_missed = missed[0], missed[1]
+                if dage is not None and dage > decision_days:
+                    alerts.append({"severity": "CRITICAL", "bank": b, "kind": "decisions",
+                                   "detail": f"last recorded rate decision is {dage}d old ({last_dec}); "
+                                             f"{n_missed} past meeting(s) unrecorded (since {oldest_missed})"})
+                elif n_missed > 0:
+                    alerts.append({"severity": "WARN", "bank": b, "kind": "decisions",
+                                   "detail": f"{n_missed} past meeting(s) still marked 'upcoming' "
+                                             f"(oldest {oldest_missed}); latest recorded {last_dec}"})
     conn.close()
     return alerts
 
