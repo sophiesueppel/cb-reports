@@ -1,9 +1,9 @@
 """
 Filtered Fed Policy Sentiment report.
 
-Adds a `relevant_to_mp` column to the DB (1=relevant, 0=off-topic, NULL=unclassified).
-Off-topic neutral speeches are faded in the table with a toggle to hide them entirely.
-Charts only include relevant speeches so they don't distort the signal.
+Includes both speeches and Congressional testimony; testimony is marked distinctly
+on the charts (diamonds) and with a badge in the table. Off-topic neutral items are
+faded with a toggle; charts show policy-relevant items only.
 
 Run:  python report_fed_filtered.py
 """
@@ -172,8 +172,18 @@ def make_timeline_with_ghosts(
     asc = df_relevant.sort_values("date")
     colors = [_dot_color(s) for s in asc["score"]]
 
+    def _is_test(u):
+        return "/newsevents/testimony/" in (u or "")
+
+    rel_test = [_is_test(u) for u in asc["url"]]
+
+    def _test_tag(is_t):
+        return ("<span style='color:#7C3AED;font-weight:700;font-size:10px;letter-spacing:.08em'>"
+                "◆ TESTIMONY</span><br>") if is_t else ""
+
     hover_rel = [
-        f"<span style='color:#111827;font-weight:600'>{r['speaker']}</span><br>"
+        _test_tag(_is_test(r["url"]))
+        + f"<span style='color:#111827;font-weight:600'>{r['speaker']}</span><br>"
         f"<span style='color:#374151'>{r['title']}</span><br>"
         f"<span style='color:#6B7280'>{r['date']}</span><br><br>"
         f"<span style='color:{score_color(r['score'])};font-weight:700'>{r['score']}/10 — {tone(r['score'])}</span><br><br>"
@@ -209,9 +219,11 @@ def make_timeline_with_ghosts(
             lambda r: int(r["original_score"]) if pd.notna(r.get("original_score")) and r.get("original_score") else 5,
             axis=1,
         )
+        ghost_test = [_is_test(u) for u in ghost["url"]]
         ghost_hover = [
             [
-                f"<span style='color:#9CA3AF;font-weight:600'>{r['speaker']}</span><br>"
+                _test_tag(_is_test(r["url"]))
+                + f"<span style='color:#9CA3AF;font-weight:600'>{r['speaker']}</span><br>"
                 f"<span style='color:#9CA3AF'>{r['title']}</span><br>"
                 f"<span style='color:#D1D5DB'>{r['date']}</span><br>"
                 f"<span style='color:#D1D5DB;font-size:11px'>Off-topic · not counted in signal</span>",
@@ -224,7 +236,8 @@ def make_timeline_with_ghosts(
             mode="markers",
             marker=dict(
                 color="rgba(255,255,255,0)",
-                size=7,
+                size=[9 if t else 7 for t in ghost_test],
+                symbol=["diamond-open" if t else "circle" for t in ghost_test],
                 line=dict(color="rgba(156,163,175,0.45)", width=1.5),
             ),
             hovertemplate="%{customdata[0]}<extra></extra>",
@@ -239,7 +252,12 @@ def make_timeline_with_ghosts(
     fig.add_trace(go.Scatter(
         x=asc["date"], y=asc["score"],
         mode="markers",
-        marker=dict(color=colors, size=9, line=dict(color="white", width=1.5)),
+        marker=dict(
+            color=colors,
+            size=[12 if t else 9 for t in rel_test],
+            symbol=["diamond" if t else "circle" for t in rel_test],
+            line=dict(color="white", width=1.5),
+        ),
         hovertemplate="%{customdata[0]}<extra></extra>",
         customdata=solid_cd,
         showlegend=False,
@@ -293,9 +311,12 @@ def make_trend_chart_linked(df: pd.DataFrame) -> str:
         short = speaker.split()[-1]
         date_range = f"{sdf['date'].min()} – {sdf['date'].max()}"
 
+        s_test = ["/newsevents/testimony/" in (u or "") for u in sdf["url"]]
         cd = [
             [
-                f"<span style='color:#111827;font-weight:600'>{speaker}</span><br>"
+                ("<span style='color:#7C3AED;font-weight:700;font-size:10px'>◆ TESTIMONY</span><br>"
+                 if "/newsevents/testimony/" in (r["url"] or "") else "")
+                + f"<span style='color:#111827;font-weight:600'>{speaker}</span><br>"
                 f"<span style='color:#374151'>{r['title']}</span><br>"
                 f"<span style='color:#6B7280'>{r['date']}</span><br><br>"
                 f"<span style='color:{score_color(r['score'])};font-weight:700'>{r['score']}/10 — {tone(r['score'])}</span><br>"
@@ -313,7 +334,9 @@ def make_trend_chart_linked(df: pd.DataFrame) -> str:
         fig.add_trace(go.Scatter(
             x=sdf["date"], y=sdf["score"],
             mode="markers", name=short, legendgroup=speaker, showlegend=False,
-            marker=dict(color=color, size=8, line=dict(color="white", width=1.5), opacity=0.9),
+            marker=dict(color=color, size=[11 if t else 8 for t in s_test],
+                        symbol=["diamond" if t else "circle" for t in s_test],
+                        line=dict(color="white", width=1.5), opacity=0.9),
             hovertemplate="%{customdata[0]}<extra></extra>",
             customdata=cd,
         ))
@@ -465,6 +488,7 @@ tbody tr.off-topic.hidden{{display:none}}
 .badge-community{{color:#9D174D;background:#FCE7F3}}
 .badge-operational{{color:#374151;background:#F3F4F6}}
 .badge-default{{color:#6B7280;background:#F3F4F6}}
+.testimony-badge{{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:3px;padding:2px 6px;margin-left:7px;vertical-align:middle;white-space:nowrap;color:#5B21B6;background:#EDE9FE;cursor:help}}
 
 .td-date{{color:#9CA3AF;font-size:11px;padding-top:15px !important}}
 .td-speaker{{font-weight:600;font-size:13px;padding-top:14px !important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
@@ -530,6 +554,7 @@ tr.expanded .chevron{{transform:rotate(180deg)}}
 .mk-hike{{background:#DC2626}}
 .mk-cut{{background:#2563EB}}
 .mk-hold{{background:repeating-linear-gradient(90deg,rgba(156,163,175,0.7) 0,rgba(156,163,175,0.7) 5px,transparent 5px,transparent 9px)}}
+.mk-sep{{width:1px;height:12px;background:#E4E8EF;margin:0 2px}}
 
 /* Compact current-rate strip below the score-history chart */
 .rate-box{{
@@ -637,7 +662,7 @@ tr.expanded .chevron{{transform:rotate(180deg)}}
   <div>
     <div class="eyebrow">Federal Reserve</div>
     <h1>Policy Sentiment Tracker</h1>
-    <div class="header-sub">Off-topic neutral speeches filtered · Charts show policy-relevant speeches only</div>
+    <div class="header-sub">Speeches &amp; testimony (&#9670; = testimony) · off-topic neutral items filtered · charts show policy-relevant only</div>
   </div>
   <div class="header-meta" id="hm"></div>
 </header>
@@ -679,6 +704,9 @@ tr.expanded .chevron{{transform:rotate(180deg)}}
   <div class="chart-wrap" id="timeline-chart">{timeline}</div>
   {rate_box}
   <div class="meeting-key">
+    <span class="mk-item"><span style="color:#6B7280;font-size:13px">&#9679;</span>Speech</span>
+    <span class="mk-item"><span style="color:#7C3AED;font-size:13px">&#9670;</span>Testimony</span>
+    <span class="mk-sep"></span>
     <span class="mk-item"><span class="mk-line mk-hike"></span>Rate hike</span>
     <span class="mk-item"><span class="mk-line mk-cut"></span>Rate cut</span>
     <span class="mk-item"><span class="mk-line mk-hold"></span>Rates held</span>
@@ -841,6 +869,7 @@ document.getElementById('tbody').innerHTML=byDate.map((d,i)=>{{
   const src=d.relevant_to_mp_source||'keyword';
   const reason=d.relevant_to_mp_reason?` — "${{d.relevant_to_mp_reason}}"`:'';
   const badge=isOff?`<span class="off-topic-badge ${{cls}}" title="Off-topic (${{src}}): ${{cat}}${{reason}}">${{cat}}</span>`:'';
+  const testBadge=d.is_testimony?'<span class="testimony-badge" title="Congressional testimony, not a speech">&#9670; Testimony</span>':'';
   const rowCls=isOff?'off-topic hidden':'';
   const hasBody=!!(d.body&&d.body!=='nan'&&d.body!=='None');
   const bodySection=hasBody?'<div class="td-body-section"><span class="td-body-label">Full speech text</span><div class="td-body"></div></div>':'';
@@ -851,7 +880,7 @@ document.getElementById('tbody').innerHTML=byDate.map((d,i)=>{{
     <td class="td-date">${{fmt(d.date)}}</td>
     <td class="td-speaker" title="${{d.speaker}}">${{d.speaker}}</td>
     <td>
-      <div class="title-text"><a href="${{d.url}}" target="_blank" onclick="event.stopPropagation()">${{d.title}}</a>${{badge}}</div>
+      <div class="title-text"><a href="${{d.url}}" target="_blank" onclick="event.stopPropagation()">${{d.title}}</a>${{testBadge}}${{badge}}</div>
       <div class="td-justification">${{d.justification||''}}</div>
       ${{evidenceSection}}
       ${{sourceBtn}}
@@ -1212,7 +1241,8 @@ def generate_fed_filtered_report() -> None:
     _ensure_column(conn)
 
     df = pd.read_sql(
-        "SELECT * FROM speeches WHERE central_bank='Federal Reserve' AND score IS NOT NULL AND date >= ? ORDER BY date DESC",
+        "SELECT * FROM speeches WHERE central_bank='Federal Reserve' AND score IS NOT NULL "
+        "AND date >= ? ORDER BY date DESC",  # includes speeches + testimony
         conn,
         params=(cutoff,),
     )
@@ -1226,7 +1256,8 @@ def generate_fed_filtered_report() -> None:
 
     # Reload with relevant_to_mp populated
     df = pd.read_sql(
-        "SELECT * FROM speeches WHERE central_bank='Federal Reserve' AND score IS NOT NULL AND date >= ? ORDER BY date DESC",
+        "SELECT * FROM speeches WHERE central_bank='Federal Reserve' AND score IS NOT NULL "
+        "AND date >= ? ORDER BY date DESC",  # includes speeches + testimony
         conn,
         params=(cutoff,),
     )
@@ -1263,11 +1294,13 @@ def generate_fed_filtered_report() -> None:
     records = df.to_dict("records")
     for r in records:
         r["relevant"] = bool(r.get("relevant_to_mp", 1))
+        r["is_testimony"] = "/newsevents/testimony/" in (r.get("url") or "")
         if not r["relevant"]:
             r["offtopic_category"] = _offtopic_category(r.get("title", ""), r.get("justification", ""))
 
     off_count = sum(1 for r in records if not r["relevant"])
-    print(f"  {len(records)} total speeches · {off_count} classified as off-topic")
+    n_test = sum(1 for r in records if r["is_testimony"])
+    print(f"  {len(records)} total items · {off_count} off-topic · {n_test} testimony")
 
     html = PAGE_TEMPLATE.format(
         timeline=timeline_html,

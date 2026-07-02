@@ -808,6 +808,18 @@ def main() -> None:
         print(f"  !! Federal Reserve step FAILED: {e}")
         traceback.print_exc()
 
+    # --- Federal Reserve testimony (separate listing from speeches, rated the same) ---
+    try:
+        from ingest_fed_testimony import ingest_new_testimony
+        print("\nChecking for new Fed testimony ...")
+        new_testimony = ingest_new_testimony()
+        if new_testimony:
+            fed_new += new_testimony
+            print(f"  +{len(new_testimony)} new testimony item(s); regenerating Fed report")
+            generate_fed_filtered_report()
+    except Exception as e:
+        print(f"  !! Fed testimony step FAILED: {e}")
+
     # Each bank is isolated: a failure logs and continues so the rest still run.
     ecb_new      = _run_bank("ECB", run_ecb_daily)
     boe_new      = _run_bank("Bank of England", run_boe_daily)
