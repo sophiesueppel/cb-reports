@@ -291,6 +291,48 @@ def _normalize_for_match(s: str) -> str:
     return s.strip().lower()
 
 
+_QUOTE_CHAR_FOLD = str.maketrans({
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", "−": "-", " ": " ",
+})
+
+
+def expand_quote_to_sentence(quote: str, text: str, max_len: int = 450) -> str:
+    """If a quote is a mid-sentence fragment, expand it to the full sentence(s) that
+    contain it, so it carries its own referent (e.g. 'we have not compromised on our
+    resolve' → the sentence naming WHAT the resolve is about). Length-preserving
+    character folding keeps indices aligned; expansion is skipped if the result would
+    exceed max_len. Returns the (possibly) expanded quote, still verbatim text."""
+    q = (quote or "").strip()
+    if not q or not text:
+        return quote
+    needs_start = q[0].islower()
+    needs_end = not q.rstrip().endswith((".", "!", "?", '"', "”", "'"))
+    if not needs_start and not needs_end:
+        return quote
+
+    t2 = text.translate(_QUOTE_CHAR_FOLD)
+    q2 = q.translate(_QUOTE_CHAR_FOLD)
+    pat = r"\s+".join(_re.escape(tok) for tok in q2.split())
+    m = _re.search(pat, t2, _re.IGNORECASE)
+    if not m:
+        return quote
+    s, e = m.span()
+
+    # backward to the start of the containing sentence
+    start = 0
+    for mm in _re.finditer(r"[.!?][\"')\]]?\s+|\n", t2[:s]):
+        start = mm.end()
+    # forward to the end of the containing sentence
+    mm = _re.search(r"[.!?][\"')\]]?(?=\s|$)", t2[e - 1:])
+    end = (e - 1 + mm.end()) if mm else len(t2)
+
+    expanded = _re.sub(r"\s+", " ", text[start:end]).strip()
+    if len(expanded) <= max_len and len(expanded) > len(q):
+        return expanded
+    return quote
+
+
 def extract_evidence_quotes(text: str, score: int, justification: str = "",
                             title: str = "", max_quotes: int = 4) -> list:
     """Pull 2–4 VERBATIM stance-revealing quotes from a directional speech, each labelled
@@ -327,7 +369,12 @@ def extract_evidence_quotes(text: str, score: int, justification: str = "",
         "score; just surface the most telling lines wherever they fall.\n"
         "PREFER lines that reveal VIEW/INTENT over bare factual statements of what was "
         "decided or what merely happened, unless the same sentence gives the reasoning "
-        "behind it. Prefer punchy single sentences. Do not invent text."
+        "behind it. Prefer punchy single sentences. Do not invent text.\n"
+        "SELF-CONTAINED: each quote must make sense to a reader who has NOT read the "
+        "speech. If a line's meaning hangs on an unstated referent (\"our resolve\", "
+        "\"this approach\", \"that expectation\", \"these measures\"), either extend the "
+        "quote to include the neighbouring words that name the subject, or choose a "
+        "different line that states it explicitly."
     )
     user_msg = f'Title: "{title}"\n\n---\n\n{text}'
 
@@ -387,7 +434,9 @@ def extract_evidence_quotes(text: str, score: int, justification: str = "",
             q_lean = "hawkish" if int(score) >= 7 else "dovish"
         if nq and nq in norm_text and nq not in seen:
             seen.add(nq)
-            validated.append({"quote": qt, "lean": q_lean})
+            # Fragments get expanded to their full sentence so the quote carries
+            # its own referent when displayed out of context.
+            validated.append({"quote": expand_quote_to_sentence(qt, text), "lean": q_lean})
         if len(validated) >= max_quotes:
             break
     return validated

@@ -18,6 +18,7 @@ Usage:
     python dedupe_speeches.py --apply    # actually delete the duplicate rows
 Also importable: dedupe_speeches(apply=True) -> number of rows removed.
 """
+import difflib
 import hashlib
 import os
 import re
@@ -60,13 +61,21 @@ def _keeper_score(r: sqlite3.Row) -> int:
     return s
 
 
-_TITLE_LEN_RATIO = 0.5  # only merge same-title rows if bodies are of similar length
+_TITLE_LEN_RATIO = 0.5   # only merge same-title rows if bodies are of similar length
+_FUZZY_LEN_RATIO = 0.7   # near-identical body check: lengths must be this similar...
+_FUZZY_SIM = 0.90        # ...and a 4k-char sample this similar (mirror-copy detection)
+
+
+def _norm_body(b: str) -> str:
+    return re.sub(r"\s+", " ", (b or "").lower()).strip()
 
 
 def _same_speech(a, b) -> bool:
     """Two rows are the same speech if their bodies are byte-identical, OR they share
     a normalized title AND their bodies are of similar length (guards against distinct
-    docs that happen to reuse a generic title, e.g. 'Opening Remarks')."""
+    docs that happen to reuse a generic title, e.g. 'Opening Remarks'), OR their bodies
+    are near-identical (mirror copies — e.g. BIS reposts with different titles and
+    cosmetic header/footer differences)."""
     ba, bb = (a["body_en"] or a["body"] or ""), (b["body_en"] or b["body"] or "")
     sa, sb = _body_sig(ba), _body_sig(bb)
     if sa and sa == sb:
@@ -77,6 +86,17 @@ def _same_speech(a, b) -> bool:
             return True
         lo, hi = sorted((len(ba), len(bb)))
         return hi > 0 and lo / hi >= _TITLE_LEN_RATIO
+    # Fuzzy: same-day same-speaker rows whose text is ~identical despite different
+    # titles/URLs (native site vs BIS mirror). Compare a mid-document sample so
+    # differing headers/footers don't mask the match.
+    if ba and bb:
+        na, nb = _norm_body(ba), _norm_body(bb)
+        lo, hi = sorted((len(na), len(nb)))
+        if hi > 500 and lo / hi >= _FUZZY_LEN_RATIO:
+            mid_a = na[len(na) // 4: len(na) // 4 + 4000]
+            mid_b = nb[len(nb) // 4: len(nb) // 4 + 4000]
+            if difflib.SequenceMatcher(None, mid_a, mid_b).ratio() >= _FUZZY_SIM:
+                return True
     return False
 
 
