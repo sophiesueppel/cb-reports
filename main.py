@@ -738,6 +738,18 @@ def main() -> None:
     if not os.environ.get("OPENAI_API_KEY"):
         sys.exit("Error: OPENAI_API_KEY not set. Copy .env.example to .env and fill in your key.")
 
+    # --- De-duplicate speeches (before anything reads/renders the DB) ---
+    # Collapses same-speech rows that slipped in twice (BIS mirror, URL variants,
+    # partial re-scrapes). Content-based and conservative — distinct same-day
+    # speeches are kept. Keeps duplicates from creeping back over time.
+    try:
+        from dedupe_speeches import dedupe_speeches
+        removed = dedupe_speeches(apply=True, verbose=False)
+        if removed:
+            print(f"De-duplicated {removed} speech row(s).")
+    except Exception as e:
+        print(f"Dedupe skipped: {e}")
+
     # --- Membership check (all banks) ---
     print("Checking committee membership ...")
     member_changes = check_members()

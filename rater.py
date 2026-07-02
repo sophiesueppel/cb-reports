@@ -293,34 +293,43 @@ def _normalize_for_match(s: str) -> str:
 
 def extract_evidence_quotes(text: str, score: int, justification: str = "",
                             title: str = "", max_quotes: int = 4) -> list:
-    """Pull 2–4 VERBATIM quotes from a directional speech that convey its hawkish or
-    dovish lean. Returns a list of {"quote": str, "lean": "hawkish"|"dovish"}.
+    """Pull 2–4 VERBATIM stance-revealing quotes from a directional speech, each labelled
+    hawkish or dovish ON ITS OWN MERITS. Returns [{"quote": str, "lean": ...}].
 
-    Only meaningful for directional scores (<=3 dovish, >=7 hawkish); returns [] for
-    neutral/off-topic. Every returned quote is validated as a real substring of the
-    speech text (after normalising quotes/dashes/whitespace) — hallucinated or
-    paraphrased quotes are dropped."""
+    The extractor is NOT told the speech's score/lean, so it won't cherry-pick only
+    confirming lines — it's instructed to surface opposing lines too when they exist.
+    `score` is used only to GATE (directional speeches ≤3 or ≥7 get quotes; neutral/
+    off-topic return []). Every quote is validated as a real substring of the speech
+    (after normalising quotes/dashes/whitespace); hallucinated/paraphrased ones dropped."""
     if score is None:
         return []
     score = int(score)
+    # Score is used ONLY to gate whether a quotes section is shown (directional
+    # speeches only) — it is deliberately NOT revealed to the extractor below, so the
+    # quote selection can't be biased toward confirming the score.
     if 4 <= score <= 6 or score == 0:
         return []
-    lean = "dovish" if score <= 3 else "hawkish"
 
     system_msg = (
-        "You extract VERBATIM supporting quotes from a central bank speech that justify "
-        f"its {lean} rating. Copy sentences or clauses EXACTLY from the speech — word for "
-        "word, same punctuation, no paraphrasing, no inserted ellipses, no square-bracket "
-        f"edits. Choose 2 to {max_quotes} short, self-contained quotes that most clearly "
-        f"convey the {lean} monetary-policy lean (rate path, inflation, labour market, "
-        "risk framing). Prefer punchy single sentences. Do not invent text."
+        "You extract VERBATIM quotes from a central bank speech that best reveal the "
+        "speaker's monetary-policy stance. Copy sentences or clauses EXACTLY from the "
+        "speech — word for word, same punctuation, no paraphrasing, no inserted ellipses, "
+        "no square-bracket edits.\n\n"
+        f"Choose 2 to {max_quotes} lines that most clearly reveal the speaker's VIEW or "
+        "INTENT on the rate path, inflation, the labour market, or the balance of risks — "
+        "their judgement, conviction, forward guidance, or how they frame risks. Judge each "
+        "line ON ITS OWN MERITS and label it 'hawkish' (leaning toward tighter policy / "
+        "inflation concern) or 'dovish' (leaning toward easier policy / growth or labour-"
+        "market concern).\n"
+        "IMPORTANT: do not assume the speech leans only one way. If it contains notable "
+        "lines pulling in BOTH directions, include the strongest of EACH — surface a "
+        "genuinely opposing line rather than omitting it. You are not deciding an overall "
+        "score; just surface the most telling lines wherever they fall.\n"
+        "PREFER lines that reveal VIEW/INTENT over bare factual statements of what was "
+        "decided or what merely happened, unless the same sentence gives the reasoning "
+        "behind it. Prefer punchy single sentences. Do not invent text."
     )
-    user_msg = (
-        f'Title: "{title}"\n'
-        f"Assigned score: {score}/10 ({lean})\n"
-        f"Rating justification: {justification}\n\n"
-        f"---\n\n{text}"
-    )
+    user_msg = f'Title: "{title}"\n\n---\n\n{text}'
 
     tool = [{
         "type": "function",
@@ -373,9 +382,12 @@ def extract_evidence_quotes(text: str, score: int, justification: str = "",
         if len(qt) < 12:
             continue
         nq = _normalize_for_match(qt)
+        q_lean = q.get("lean")
+        if q_lean not in ("hawkish", "dovish"):
+            q_lean = "hawkish" if int(score) >= 7 else "dovish"
         if nq and nq in norm_text and nq not in seen:
             seen.add(nq)
-            validated.append({"quote": qt, "lean": q.get("lean", lean)})
+            validated.append({"quote": qt, "lean": q_lean})
         if len(validated) >= max_quotes:
             break
     return validated
