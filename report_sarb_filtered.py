@@ -6,7 +6,7 @@ from report_filtered_base import generate_filtered_report
 
 def generate_sarb_filtered_report() -> None:
     from meetings import get_meetings
-    from scraper_sarb import ALL_SARB, _SARB_CURRENT
+    from members_seed import is_member, current_members
 
     generate_filtered_report(
         bank_db_name="SARB",
@@ -14,8 +14,8 @@ def generate_sarb_filtered_report() -> None:
         accent_color="#006B3F",  # SARB green
         output_path=Path("report_sarb_filtered.html"),
         meetings=get_meetings("SARB"),
-        member_filter=lambda speaker, date: speaker in ALL_SARB,
-        active_members=list(_SARB_CURRENT),
+        member_filter=lambda speaker, date: is_member("sarb", speaker, date),
+        active_members=current_members("sarb"),
     )
 
 

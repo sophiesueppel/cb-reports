@@ -6,7 +6,7 @@ from report_filtered_base import generate_filtered_report
 
 def generate_cnb_filtered_report() -> None:
     from meetings import get_meetings
-    from scraper_cnb import ALL_CNB
+    from members_seed import is_member, current_members
 
     generate_filtered_report(
         bank_db_name="CNB",
@@ -14,8 +14,8 @@ def generate_cnb_filtered_report() -> None:
         accent_color="#D7141A",  # Czech flag red
         output_path=Path("report_cnb_filtered.html"),
         meetings=get_meetings("CNB"),
-        member_filter=lambda speaker, date: speaker in ALL_CNB,
-        active_members=list(ALL_CNB),
+        member_filter=lambda speaker, date: is_member("cnb", speaker, date),
+        active_members=current_members("cnb"),
     )
 
 

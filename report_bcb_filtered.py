@@ -6,7 +6,7 @@ from report_filtered_base import generate_filtered_report
 
 def generate_bcb_filtered_report() -> None:
     from meetings import get_meetings
-    from scraper_bcb import ALL_COPOM
+    from members_seed import is_member, current_members
 
     generate_filtered_report(
         bank_db_name="BCB",
@@ -14,8 +14,8 @@ def generate_bcb_filtered_report() -> None:
         accent_color="#009B3A",  # Brazilian green
         output_path=Path("report_bcb_filtered.html"),
         meetings=get_meetings("BCB"),
-        member_filter=lambda speaker, date: speaker in ALL_COPOM,
-        active_members=list(ALL_COPOM),
+        member_filter=lambda speaker, date: is_member("bcb", speaker, date),
+        active_members=current_members("bcb"),
     )
 
 

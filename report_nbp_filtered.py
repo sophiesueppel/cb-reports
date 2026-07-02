@@ -6,7 +6,7 @@ from report_filtered_base import generate_filtered_report
 
 def generate_nbp_filtered_report() -> None:
     from meetings import get_meetings
-    from scraper_nbp import ALL_NBP
+    from members_seed import is_member, current_members
 
     generate_filtered_report(
         bank_db_name="NBP",
@@ -14,8 +14,8 @@ def generate_nbp_filtered_report() -> None:
         accent_color="#DC143C",  # Polish flag red
         output_path=Path("report_nbp_filtered.html"),
         meetings=get_meetings("NBP"),
-        member_filter=lambda speaker, date: speaker in ALL_NBP,
-        active_members=list(ALL_NBP),
+        member_filter=lambda speaker, date: is_member("nbp", speaker, date),
+        active_members=current_members("nbp"),
     )
 
 

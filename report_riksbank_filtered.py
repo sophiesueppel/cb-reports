@@ -6,7 +6,7 @@ from report_filtered_base import generate_filtered_report
 
 def generate_riksbank_filtered_report() -> None:
     from meetings import get_meetings
-    from scraper_riksbank import ALL_RIKSBANK
+    from members_seed import is_member, current_members
 
     generate_filtered_report(
         bank_db_name="Riksbank",
@@ -14,8 +14,8 @@ def generate_riksbank_filtered_report() -> None:
         accent_color="#006AA7",  # Swedish blue
         output_path=Path("report_riksbank_filtered.html"),
         meetings=get_meetings("Riksbank"),
-        member_filter=lambda speaker, date: speaker in ALL_RIKSBANK,
-        active_members=list(ALL_RIKSBANK),
+        member_filter=lambda speaker, date: is_member("riksbank", speaker, date),
+        active_members=current_members("riksbank"),
     )
 
 
