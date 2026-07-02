@@ -99,8 +99,10 @@ _FALLBACK: dict[str, dict[str, list]] = {
         "Adriana Kugler":            [["2023-09-13", None]],
         "Christopher Waller":        [["2020-12-18", None]],
         "Kevin Warsh":               [["2026-02-01", None]],
+        # Barr stepped down as Vice Chair for Supervision on 2025-02-28 but remains
+        # a sitting Governor (term to 2032) — keep him current so his speeches count.
+        "Michael Barr":              [["2022-07-19", None]],
         # Recent departed
-        "Michael Barr":              [["2022-07-19", "2025-02-28"]],
         "Lael Brainard":             [["2014-06-16", "2023-02-13"]],
         "Randal Quarles":            [["2017-10-13", "2021-12-31"]],
         "Richard Clarida":           [["2018-09-17", "2022-01-14"]],
