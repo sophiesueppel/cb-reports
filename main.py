@@ -750,6 +750,21 @@ def main() -> None:
     except Exception as e:
         print(f"Dedupe skipped: {e}")
 
+    # --- Data-quality audit (warnings only; never blocks the run) ---
+    # Checks whole defect classes: duplicates, quote integrity, meetings
+    # consistency, scraper freshness, translation gaps etc. (data_audit.py).
+    try:
+        from data_audit import run_audit
+        issues = [(c, n, s) for c, n, s in run_audit(quiet=True) if n]
+        if issues:
+            print("DATA AUDIT WARNINGS:")
+            for check, n, samples in issues:
+                print(f"  !! {check}: {n}")
+                for s in samples[:2]:
+                    print(f"       {s}")
+    except Exception as e:
+        print(f"Audit skipped: {e}")
+
     # --- Membership check (all banks) ---
     print("Checking committee membership ...")
     member_changes = check_members()

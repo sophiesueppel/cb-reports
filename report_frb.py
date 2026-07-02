@@ -55,10 +55,11 @@ _BP_RE = re.compile(r"([+-]?\d+(?:\.\d+)?)\s*bp", re.I)
 
 
 def _rate_to_float(rate: str):
-    """Parse a rate string to a float percent. Ranges (en-dash) → midpoint."""
+    """Parse a rate string to a float percent. Ranges (en-dash) → midpoint.
+    Handles Unicode minus (U+2212) used in negative-rate entries (e.g. ECB '−0.50%')."""
     if not rate:
         return None
-    s = rate.replace("%", "").strip()
+    s = rate.replace("%", "").replace("−", "-").strip()
     parts = [p.strip() for p in s.split("–")]  # en-dash range separator
     nums = []
     for p in parts:

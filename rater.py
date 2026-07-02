@@ -154,18 +154,30 @@ def _rate_at_date(bank: str, speech_date: str) -> str | None:
     return f"{latest['rate']} ({action} {latest['date']})"
 
 
-def _speaker_baseline(speaker: str, speech_date: str, db_path: str) -> str | None:
-    """Return a short description of the speaker's recent scoring history."""
+def _speaker_baseline(speaker: str, speech_date: str, db_path: str,
+                      bank: str | None = None) -> str | None:
+    """Return a short description of the speaker's recent scoring history.
+
+    Matches on the NORMALIZED speaker name, so title changes don't split one
+    person's history (e.g. 'Governor Jerome H. Powell' vs 'Chair Jerome H. Powell',
+    'Governor Lael Brainard' vs 'Vice Chair Lael Brainard')."""
     if not db_path or not Path(db_path).exists():
         return None
     conn = sqlite3.connect(db_path)
-    rows = conn.execute(
-        "SELECT score, date FROM speeches "
-        "WHERE speaker=? AND score IS NOT NULL AND date < ? "
-        "ORDER BY date DESC LIMIT 5",
-        (speaker, speech_date),
+    all_rows = conn.execute(
+        "SELECT score, date, speaker, central_bank FROM speeches "
+        "WHERE score IS NOT NULL AND date < ? ORDER BY date DESC",
+        (speech_date,),
     ).fetchall()
     conn.close()
+    try:
+        from speaker_norm import normalize_speaker
+        target = normalize_speaker(speaker, bank or "")
+        rows = [(s, d) for s, d, sp, b in all_rows
+                if (bank is None or b == bank)
+                and normalize_speaker(sp or "", b or "") == target][:5]
+    except Exception:
+        rows = [(s, d) for s, d, sp, _ in all_rows if sp == speaker][:5]
     if not rows:
         return None
     scores = [r[0] for r in rows]
@@ -215,7 +227,7 @@ def rate_speech(
         if rate:
             context_lines.append(f"Policy rate at time of speech: {rate}")
     if db_path:
-        baseline = _speaker_baseline(speaker, date, db_path)
+        baseline = _speaker_baseline(speaker, date, db_path, bank=bank)
         if baseline:
             context_lines.append(f"Speaker history: {baseline}")
 

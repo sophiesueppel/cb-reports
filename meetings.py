@@ -950,9 +950,9 @@ BNR_MEETINGS = (
 CBRT_MEETINGS_2021 = [
     {"date": "2021-01-21", "decision": "hold", "rate": "17.00%", "label": "Rates held"},
     {"date": "2021-02-18", "decision": "hold", "rate": "17.00%", "label": "Rates held"},
-    {"date": "2021-03-18", "decision": "cut",  "rate": "19.00%",
-     "note": "Rate hiked to 19% then cut under Kavcioglu. Complex period.",
-     "label": "+200bp hike then cuts"},
+    {"date": "2021-03-18", "decision": "hike", "rate": "19.00%",
+     "note": "Agbal's +200bp hike to 19%; he was dismissed two days later.",
+     "label": "+200bp hike"},
     {"date": "2021-04-15", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
     {"date": "2021-05-06", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
     {"date": "2021-06-17", "decision": "hold", "rate": "19.00%", "label": "Rates held"},
@@ -971,12 +971,12 @@ CBRT_MEETINGS_2022 = [
     {"date": "2022-04-14", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
     {"date": "2022-05-26", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
     {"date": "2022-06-23", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
-    {"date": "2022-07-21", "decision": "cut",  "rate": "13.00%", "label": "-100bp cut"},
-    {"date": "2022-08-18", "decision": "cut",  "rate": "12.00%", "label": "-100bp cut"},
-    {"date": "2022-09-22", "decision": "cut",  "rate": "11.00%", "label": "-100bp cut"},
-    {"date": "2022-10-20", "decision": "hold", "rate": "11.00%", "label": "Rates held"},
-    {"date": "2022-11-24", "decision": "hold", "rate": "11.00%", "label": "Rates held"},
-    {"date": "2022-12-22", "decision": "hold", "rate": "11.00%", "label": "Rates held"},
+    {"date": "2022-07-21", "decision": "hold", "rate": "14.00%", "label": "Rates held"},
+    {"date": "2022-08-18", "decision": "cut",  "rate": "13.00%", "label": "-100bp cut"},
+    {"date": "2022-09-22", "decision": "cut",  "rate": "12.00%", "label": "-100bp cut"},
+    {"date": "2022-10-20", "decision": "cut",  "rate": "10.50%", "label": "-150bp cut"},
+    {"date": "2022-11-24", "decision": "cut",  "rate": "9.00%",  "label": "-150bp cut"},
+    {"date": "2022-12-22", "decision": "hold", "rate": "9.00%",  "label": "Rates held"},
 ]
 
 CBRT_MEETINGS_2023 = [

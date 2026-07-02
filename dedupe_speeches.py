@@ -171,6 +171,62 @@ def dedupe_speeches(apply: bool = False, verbose: bool = True) -> int:
             for lo in losers:
                 to_delete.append((keeper, lo))
 
+    # ---- cross-date duplicates ------------------------------------------------
+    # The same speech can land under two DATES (BIS republishes weeks later; repeat
+    # deliveries of identical remarks at different venues). Same-speaker rows with
+    # near-identical bodies within a 400-day window are collapsed to one, keeping
+    # the most-enriched copy (earlier date wins ties = original publication).
+    from datetime import date as _date
+    deleted_urls = {lo["url"] for _, lo in to_delete}
+    by_spk = defaultdict(list)
+    for r in norm_rows:
+        if r["url"] in deleted_urls or not r["date"]:
+            continue
+        nb = _norm_body(r["body_en"] or r["body"])
+        if len(nb) > 500:
+            by_spk[(r["central_bank"], r["speaker"])].append((r, nb))
+    for key, items in by_spk.items():
+        items.sort(key=lambda x: x[0]["date"])
+        n = len(items)
+        parent = list(range(n))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        for i in range(n):
+            for j in range(i + 1, min(i + 30, n)):
+                r1, b1 = items[i]
+                r2, b2 = items[j]
+                if r1["date"] == r2["date"]:
+                    continue  # same-date pass already handled these
+                dd = (_date.fromisoformat(r2["date"]) - _date.fromisoformat(r1["date"])).days
+                if dd > 400:
+                    break  # items sorted by date
+                lo_, hi_ = sorted((len(b1), len(b2)))
+                if lo_ / hi_ < 0.9:
+                    continue
+                if b1 == b2 or difflib.SequenceMatcher(
+                        None, b1[len(b1)//4:len(b1)//4+3000],
+                        b2[len(b2)//4:len(b2)//4+3000]).ratio() >= 0.92:
+                    parent[find(i)] = find(j)
+        xclusters = defaultdict(list)
+        for i, (r, _) in enumerate(items):
+            xclusters[find(i)].append(r)
+        for cl in xclusters.values():
+            if len(cl) < 2:
+                continue
+            urls = [c["url"] or "" for c in cl]
+            if any("/testimony/" in u for u in urls) and any("/speech/" in u for u in urls):
+                skipped.append(cl)
+                continue
+            cl.sort(key=lambda r: (-_keeper_score(r), r["date"]))
+            keeper, losers = cl[0], cl[1:]
+            for lo in losers:
+                to_delete.append((keeper, lo))
+
     if verbose and skipped:
         print(f"Skipped {len(skipped)} testimony/speech crossover cluster(s) for manual review:")
         for cl in skipped:
